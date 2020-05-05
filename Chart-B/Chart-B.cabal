@@ -1,0 +1,33 @@
+Name: Chart-B
+Version: 0.1
+Synopsis: Haskell plotting library
+Description:
+  Fork of Chart lbrary which aims to provide better API while reuseing all plotting
+
+Cabal-Version:  >= 1.8
+License:        BSD3
+License-File:   LICENSE
+Author:         Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Maintainer:     Aleksey Khudyakov <alexey.skladnoy@gmail.com>
+Category:       Graphics
+Build-Type:     Simple
+
+library
+  Build-depends: base               >= 3 && < 5
+               , old-locale
+               , time
+               , array
+               , lens               >=3.9   && <4.20
+               , colour             >=2.2.1 && <2.4
+               , data-default-class <0.2
+               , mtl                >=2.0    && <2.3
+               , operational        >=0.2.2  && <0.3
+               , vector             >=0.9    && <0.13
+               , Chart
+               , Chart-cairo
+
+
+  Ghc-options: -Wall
+
+  Exposed-modules:
+        Graphics.Rendering.ChartB
