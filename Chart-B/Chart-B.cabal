@@ -13,6 +13,7 @@ Category:       Graphics
 Build-Type:     Simple
 
 library
+  Default-Language: Haskell2010
   Build-depends: base               >= 3 && < 5
                , old-locale
                , time
