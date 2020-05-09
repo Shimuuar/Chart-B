@@ -45,6 +45,15 @@ instance Monoid (PlotParam Endo) where
     }
 
 
+applyPlotParam :: PlotParam Endo -> PlotParam Identity -> PlotParam Identity
+applyPlotParam pEndo pDef = PlotParam
+  { _plotMainColor = apply _plotMainColor
+  , _plotMainAlpha = apply _plotMainAlpha
+  }
+  where
+    apply :: (forall f. PlotParam f -> f a) -> Identity a
+    apply f = Identity $ f pEndo `appEndo` runIdentity (f pDef)
+
 endoL :: Setter' (Endo a) a
 endoL fun (Endo f) = fmap Endo $ distribute $ fun . f
 
