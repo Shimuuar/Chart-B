@@ -44,11 +44,12 @@ save = void . Cairo.renderableToFile
 go plt = save $ fillBackground def $ Renderable
   { minsize = return (0,0)
   , render  = \(w,h) -> do
-      let viewportTransform = Matrix
-            { xx = 0.9*w, yx = 0
-            , xy = 0    , yy = -0.9*h
-            , x0 = w*0.05
-            , y0 = h*0.95
+      let marginAxis = 0.03
+          viewportTransform = Matrix
+            { xx = (1 - 2*marginAxis)*w, yx = 0
+            , xy = 0                   , yy = -(1 - 2*marginAxis)*h
+            , x0 = w*marginAxis
+            , y0 = h*(1-marginAxis)
             }
           -- Compute limits
           (xA,xB) = fromRange (axisX plt) (getFirst *** getFirst $ limitX plt)
@@ -58,8 +59,8 @@ go plt = save $ fillBackground def $ Renderable
           plotTransform = Matrix
             { xx = 1/(xB-xA), yx = 0
             , xy = 0        , yy = 1/(yB-yA)
-            , x0 = -xA
-            , y0 = -yA
+            , x0 = -xA / (xB - xA)
+            , y0 = -yA / (yB - yA)
             }
       let p0 = param plt
           p = PlotParam
@@ -67,8 +68,12 @@ go plt = save $ fillBackground def $ Renderable
               , _plotMainAlpha = Identity $ appEndo (_plotMainAlpha p0) 1
               }
       let tr = plotTransform * viewportTransform
-      withClipRegion (Rect (transformP tr (Point 0 0)) (transformP tr (Point 1 1)))
+      withClipRegion (Rect (transformP viewportTransform (Point 0 0)) (transformP viewportTransform (Point 1 1)))
         $ plot plt p tr
+      alignStrokePoints [ transformL viewportTransform p
+                        | p <- [Point 0 0, Point 0 1, Point 1 1,Point 1 0, Point 0 0]
+                        ] >>= strokePointPath
+
       return (const Nothing)
   }
   where
@@ -76,7 +81,7 @@ go plt = save $ fillBackground def $ Renderable
     fromRange UnknownLim (Nothing, Nothing) = (0   , 1  )
     fromRange UnknownLim (Just a,  Nothing) = (a   , a+1)
     fromRange UnknownLim (Nothing, Just b)  = (b-1 , b  )
-    fromRange (MinMaxLimits a b) (Nothing, Nothing) = (a - 0.05*d, b+0.05*d)
+    fromRange (MinMaxLimits a b) (Nothing, Nothing) = (a - 0.05*d, b + 0.05*d)
       where d = b - a
     fromRange (MinMaxLimits _ b) (Just a, Nothing) = (a, b + 0.05*d)
       where b' = max a b
@@ -84,12 +89,6 @@ go plt = save $ fillBackground def $ Renderable
     fromRange (MinMaxLimits a _) (Nothing, Just b) = (a' - 0.05*d, b)
       where a' = min a b
             d  = b - a'
-    -- fromRange UnknownLim = (0,1)
-    -- fromRange (MinMaxLimits a b)
-    --   | a == b    = (a-0.5, a+0.5)
-    --   | otherwise = (a - 0.05*d, b+0.05*d)
-    --   where
-    --     d = b - a
 
 scatterplot :: [(Double,Double)] -> PlotObj Numeric Numeric
 scatterplot xy = PlotObj
@@ -204,3 +203,18 @@ instance Axis Numeric where
 
 data Time
 data Categori
+
+
+
+----------------------------------------------------------------
+--
+----------------------------------------------------------------
+
+class Transformable a where
+  transformL :: Matrix -> a -> a
+
+instance Transformable Point where
+  transformL = transformP
+
+instance Transformable Rect where
+  transformL m (Rect p1 p2) = Rect (transformL m p1) (transformL m p2)
