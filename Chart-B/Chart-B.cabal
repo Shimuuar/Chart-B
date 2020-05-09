@@ -20,6 +20,7 @@ library
                , array
                , lens               >=3.9   && <4.20
                , colour             >=2.2.1 && <2.4
+               , distributive
                , data-default-class <0.2
                , mtl                >=2.0    && <2.3
                , operational        >=0.2.2  && <0.3
@@ -32,3 +33,4 @@ library
 
   Exposed-modules:
         Graphics.Rendering.ChartB
+        Graphics.Rendering.ChartB.PlotParam
