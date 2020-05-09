@@ -32,11 +32,22 @@ go plt = save $ fillBackground def $ Renderable
       return (const Nothing)
   }
 
-test :: PlotObj Numeric Numeric
-test = PlotObj
+test1 :: PlotObj Numeric Numeric
+test1 = PlotObj
   { plot  = \_ tr -> do
       forM_ [0, 1e-3 .. 1] $ \x ->
         drawPoint def $ transformP tr $ Point x (x*x)
+      return ()
+  , axisX = ()
+  , axisY = ()
+  , param = PlotParam
+  }
+
+test2 :: PlotObj Numeric Numeric
+test2 = PlotObj
+  { plot  = \_ tr -> do
+      forM_ [0, 1e-3 .. 1] $ \x ->
+        drawPoint def $ transformP tr $ Point x (x*x*x)
       return ()
   , axisX = ()
   , axisY = ()
@@ -49,6 +60,8 @@ test = PlotObj
 
 data PlotParam = PlotParam
 
+instance Semigroup PlotParam where
+  PlotParam <> PlotParam = PlotParam
 
 -- | Single entity on plog
 data PlotObj x y = PlotObj
@@ -58,7 +71,13 @@ data PlotObj x y = PlotObj
   , param :: PlotParam
   }
 
-
+instance (Axis x, Axis y) => Semigroup (PlotObj x y) where
+  a <> b = PlotObj
+    { plot = \p m -> plot a p m >> plot b p m
+    , axisX = axisX a <> axisX b
+    , axisY = axisY a <> axisY b
+    , param = param a <> param b
+    }
 
 ----------------------------------------------------------------
 -- Axes
