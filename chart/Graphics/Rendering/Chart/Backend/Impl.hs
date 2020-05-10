@@ -62,7 +62,7 @@ data ChartBackendInstr a where
 --   
 --   Information about the semantics of the instructions can be 
 --   found in the documentation of 'ChartBackendInstr'.
-type BackendProgram a = Program ChartBackendInstr a
+type BackendProgram = Program ChartBackendInstr
 
 -- | Stroke the outline of the given path using the 
 --   current 'LineStyle'. This function does /not/ perform
