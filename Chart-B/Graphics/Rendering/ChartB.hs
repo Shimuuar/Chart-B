@@ -15,19 +15,15 @@ import Data.Default.Class
 import Data.Monoid
 import Data.Coerce
 import Data.Foldable
-import Data.Distributive
+import Data.Maybe
 import Data.Proxy
-import Control.Arrow ((***))
-import Control.Applicative
 import Control.Category
 import Control.Monad
 import Control.Lens
-import Control.Lens.Unsound (lensProduct)
 import qualified Graphics.Rendering.Chart.Backend.Cairo as Cairo
 import Graphics.Rendering.Chart.Renderable
 import Graphics.Rendering.Chart.Drawing
 import Graphics.Rendering.Chart.Geometry
-import Debug.Trace
 import Prelude hiding (id,(.))
 import Data.Colour
 import Data.Colour.Names
@@ -44,8 +40,8 @@ save = void . Cairo.renderableToFile
 
 
 
-go :: PlotObj Numeric Numeric -> IO ()
-go plt = save $ fillBackground def $ Renderable
+makePlot :: PlotObj Numeric Numeric -> IO ()
+makePlot plt = save $ fillBackground def $ Renderable
   { minsize = return (0,0)
   , render  = \(w,h) -> do
       -- Viewport for plot itself
@@ -78,13 +74,10 @@ go plt = save $ fillBackground def $ Renderable
             , x0 = -xA / (xB - xA)
             , y0 = -yA / (yB - yA)
             }
-      let p = applyPlotParam (param plt) PlotParam
-                { _plotMainColor = Identity black
-                , _plotMainAlpha = Identity 1
-                }
+      let p0 = applyEndo (param plt) def
       let tr = plotTransform * viewportTransform
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
-        $ plot plt p tr
+        $ plot plt p0 tr
       alignStrokePoints [ transformL viewportTransform p
                         | p <- [Point 0 0, Point 0 1, Point 1 1,Point 1 0, Point 0 0]
                         ] >>= strokePointPath
@@ -114,12 +107,20 @@ applyFoldMap toM fld = fld (\m a -> m <> toM a) mempty
 scatterplot :: [(Double,Double)] -> PlotObj Numeric Numeric
 scatterplot xy = PlotObj
   { plot = \p tr -> do
-      let style = def { _point_color = withOpacity
-                          (p ^. plotMainColor . _Wrapped)
-                          (p ^. plotMainAlpha . _Wrapped)
-                      }
-      forM_ xy $ \(x,y) ->
-        drawPoint style $ transformP tr $ Point x y
+      -- Compute sttyle of markers
+      let mstyle = do
+            s <- p ^. plotMarker . markerStyle . _Wrapped
+            Just PointStyle
+              { _point_color        = fromMaybe (p ^. plotMainColor . _Wrapped)
+                                    $ p ^. plotMarker . markerColor . _Wrapped
+              , _point_border_color = p ^. plotMarker . markerBorderColor . _Wrapped
+              , _point_border_width = p ^. plotMarker . markerBorderWidth . _Wrapped
+              , _point_radius       = p ^. plotMarker . markerRadius . _Wrapped
+              , _point_shape        = s
+              }
+      forM_ mstyle $ \style -> 
+        forM_ xy $ \(x,y) ->
+          drawPoint style $ transformP tr $ Point x y
   , pointData  = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
   , limitX = (Nothing, Nothing)
   , limitY = (Nothing, Nothing)
@@ -130,6 +131,15 @@ scatterplot xy = PlotObj
 x2,x3 :: [(Double,Double)]
 x2 = [(x,x*x)   | x <- [0, 1e-2 .. 1.3 ]]
 x3 = [(x,x*x*x) | x <- [0, 1e-2 .. 1   ]]
+
+
+go = mconcat
+  [ scatterplot x2
+    & prop #color .~ opaque blue
+    & prop (#marker . #size) .~ (4 :: Double)
+  , scatterplot x3 & prop #color .~ opaque red
+  ]
+  & prop #xlim .~ (Nothing, Just 1)
 
 ----------------------------------------------------------------
 --
@@ -143,28 +153,45 @@ instance Category Property where
   id = id
   Property f . Property g = Property (f . g)
 
-instance (a ~ Double) => IsLabel "color" (Property (Colour a) (PlotParam Endo)) where
+instance (a ~ Double) => IsLabel "color" (Property (AlphaColour a) (PlotParam Endo)) where
   fromLabel = Property $ plotMainColor . endoL
 
-instance IsLabel "opacity" (Property Double (PlotParam Endo)) where
-  fromLabel = Property $ plotMainAlpha . endoL
+-- instance IsLabel "opacity" (Property Double (PlotParam Endo)) where
+--   fromLabel = Property $ plotMainAlpha . endoL
 
 -- instance (a ~ Double) => IsLabel "acolor" (Property (PlotParam Endo) (AlphaColour a)) where
 --   fromLabel = Property $
 --     lensProduct plotMainColor plotMainAlpha . undefined
 
-instance (a ~ Double) => IsLabel "color" (Property (Colour a) (PlotObj x y)) where
+instance (a ~ Double) => IsLabel "color" (Property (AlphaColour a) (PlotObj x y)) where
   fromLabel = Property paramL . fromLabel @"color"
-instance (a ~ Double) => IsLabel "opacity" (Property (Colour a) (PlotObj x y)) where
-  fromLabel = Property paramL . fromLabel @"color"
+-- instance (a ~ Double) => IsLabel "opacity" (Property (Colour a) (PlotObj x y)) where
+--   fromLabel = Property paramL . fromLabel @"color"
 
-instance (AxisValue x ~ xlim, AxisValue x ~ xlim'
+instance (p ~ MarkerParam Endo) => IsLabel "marker" (Property p (PlotObj x y)) where
+  fromLabel = Property (paramL . plotMarker)
+
+instance ( AxisValue x ~ xlim, AxisValue x ~ xlim'
          ) => IsLabel "xlim" (Property (Maybe xlim, Maybe xlim') (PlotObj x y)) where
   fromLabel = Property $ lens limitX (\p x -> p { limitX = x })
 
-
-instance (AxisValue y ~ ylim) => IsLabel "ylim" (Property (Maybe ylim, Maybe ylim) (PlotObj x y)) where
+instance ( AxisValue y ~ ylim, AxisValue y ~ ylim'
+         ) => IsLabel "ylim" (Property (Maybe ylim, Maybe ylim') (PlotObj x y)) where
   fromLabel = Property $ lens limitY (\p x -> p { limitY = x })
+
+instance IsLabel "shape" (Property (Maybe PointShape) (MarkerParam Endo)) where
+  fromLabel = Property $ markerStyle . endoL
+
+instance IsLabel "shape" (Property PointShape (MarkerParam Endo)) where
+  fromLabel = Property $ markerStyle . endoL . fun
+    where
+      fun f Nothing  = Just <$> f PointShapeCircle
+      fun f (Just x) = Just <$> f x
+
+instance IsLabel "size" (Property Double (MarkerParam Endo)) where
+  fromLabel = Property $ markerRadius . endoL
+
+
 
 paramL :: Lens' (PlotObj x y) (PlotParam Endo)
 paramL = lens param (\x p -> x { param = p })
@@ -181,8 +208,8 @@ data PlotObj x y = PlotObj
 
 instance (Axis x, Axis y) => Semigroup (PlotObj x y) where
   a <> b = PlotObj
-    { plot = \p m -> do plot a (applyPlotParam (param a) p) m
-                        plot b (applyPlotParam (param b) p) m
+    { plot = \p m -> do plot a (applyEndo (param a) p) m
+                        plot b (applyEndo (param b) p) m
     , pointData = pointData a <> pointData b
     , limitX = limitX a `onFirst` limitX b
     , limitY = limitY a `onFirst` limitY b
@@ -192,7 +219,14 @@ instance (Axis x, Axis y) => Semigroup (PlotObj x y) where
       onFirst :: forall a. (Maybe a, Maybe a) -> (Maybe a, Maybe a) -> (Maybe a, Maybe a)
       onFirst x y = coerce (coerce x <> coerce y :: (First a, First a))
 
-
+instance (Axis x, Axis y) => Monoid (PlotObj x y) where
+  mempty = PlotObj
+    { plot      = \_ _ -> return ()
+    , pointData = FoldOverAxes $ \_ _ _ -> id
+    , limitX    = (Nothing,Nothing)
+    , limitY    = (Nothing,Nothing)
+    , param     = mempty
+    }
 
 
 ----------------------------------------------------------------
