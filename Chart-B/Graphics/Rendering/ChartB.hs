@@ -1,13 +1,16 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedLabels           #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
 -- |
 module Graphics.Rendering.ChartB where
 
@@ -19,6 +22,8 @@ import Data.Maybe
 import Data.Proxy
 import Control.Category
 import Control.Monad
+import Control.Monad.State.Strict
+import Control.Monad.Reader
 import Control.Lens
 import qualified Graphics.Rendering.Chart.Backend.Cairo as Cairo
 import Graphics.Rendering.Chart.Renderable
@@ -74,10 +79,9 @@ makePlot plt = save $ fillBackground def $ Renderable
             , x0 = -xA / (xB - xA)
             , y0 = -yA / (yB - yA)
             }
-      let p0 = applyEndo (param plt) def
       let tr = plotTransform * viewportTransform
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
-        $ plot plt p0 tr
+        $ runDrawing tr $ plot plt (param plt)
       alignStrokePoints [ transformL viewportTransform p
                         | p <- [Point 0 0, Point 0 1, Point 1 1,Point 1 0, Point 0 0]
                         ] >>= strokePointPath
@@ -106,7 +110,9 @@ applyFoldMap toM fld = fld (\m a -> m <> toM a) mempty
 
 scatterplot :: [(Double,Double)] -> PlotObj Numeric Numeric
 scatterplot xy = PlotObj
-  { plot = \p tr -> do
+  { plot = \pEndo -> do
+      advanceColorWheel
+      p <- applyEndo pEndo <$> getDefaultPlotParam
       -- Compute sttyle of markers
       let mstyle = do
             s <- p ^. plotMarker . markerStyle . _Wrapped
@@ -120,7 +126,7 @@ scatterplot xy = PlotObj
               }
       forM_ mstyle $ \style -> 
         forM_ xy $ \(x,y) ->
-          drawPoint style $ transformP tr $ Point x y
+          liftedDrawPoint style $ Point x y
   , pointData  = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
   , limitX = (Nothing, Nothing)
   , limitY = (Nothing, Nothing)
@@ -140,6 +146,12 @@ go = mconcat
   , scatterplot x3 & prop #color .~ opaque red
   ]
   & prop #xlim .~ (Nothing, Just 1)
+
+go2 = mconcat
+  [ scatterplot x2
+  , scatterplot x3
+  ]
+
 
 ----------------------------------------------------------------
 --
@@ -199,7 +211,7 @@ paramL = lens param (\x p -> x { param = p })
 
 -- | Single entity on plog
 data PlotObj x y = PlotObj
-  { plot      :: PlotParam Identity -> Matrix -> BackendProgram ()
+  { plot      :: PlotParam Endo -> Drawing ()
   , pointData :: FoldOverAxes x y
   , limitX    :: (Maybe (AxisValue x), Maybe (AxisValue x))
   , limitY    :: (Maybe (AxisValue y), Maybe (AxisValue y))
@@ -208,8 +220,8 @@ data PlotObj x y = PlotObj
 
 instance (Axis x, Axis y) => Semigroup (PlotObj x y) where
   a <> b = PlotObj
-    { plot = \p m -> do plot a (applyEndo (param a) p) m
-                        plot b (applyEndo (param b) p) m
+    { plot = \p -> do plot a (p <> param a)
+                      plot b (p <> param b)
     , pointData = pointData a <> pointData b
     , limitX = limitX a `onFirst` limitX b
     , limitY = limitY a `onFirst` limitY b
@@ -221,7 +233,7 @@ instance (Axis x, Axis y) => Semigroup (PlotObj x y) where
 
 instance (Axis x, Axis y) => Monoid (PlotObj x y) where
   mempty = PlotObj
-    { plot      = \_ _ -> return ()
+    { plot      = \_ -> return ()
     , pointData = FoldOverAxes $ \_ _ _ -> id
     , limitX    = (Nothing,Nothing)
     , limitY    = (Nothing,Nothing)
@@ -317,3 +329,34 @@ instance Transformable Point where
 
 instance Transformable Rect where
   transformL m (Rect p1 p2) = Rect (transformL m p1) (transformL m p2)
+
+
+----------------------------------------------------------------
+-- Drawing monad
+----------------------------------------------------------------
+
+newtype Drawing a = Drawing (StateT [AlphaColour Double] (ReaderT Matrix BackendProgram) a)
+  deriving newtype (Functor, Applicative, Monad)
+
+runDrawing :: Matrix -> Drawing a -> BackendProgram a
+runDrawing tr (Drawing act)
+  = flip runReaderT tr
+  $ evalStateT act defColors
+  where
+    defColors = opaque black
+              : cycle (map opaque $ [blue, red, green, yellow, cyan, magenta])
+
+
+advanceColorWheel :: Drawing ()
+advanceColorWheel = Drawing $ modify tail
+
+getDefaultPlotParam :: Drawing (PlotParam Identity)
+getDefaultPlotParam = Drawing $ do
+  c <- head <$> get
+  return $ def & plotMainColor . _Wrapped .~ c
+
+liftedDrawPoint :: PointStyle -> Point -> Drawing ()
+liftedDrawPoint st p = do
+  tr <- Drawing ask
+  Drawing $ lift $ lift $ drawPoint st (transformL tr p)
+
