@@ -140,39 +140,49 @@ applyFoldMap toM fld = fld (\m a -> m <> toM a) mempty
 
 scatterplot :: [(Double,Double)] -> PlotObj Numeric Numeric
 scatterplot xy = PlotObj
-  { plotFunction = \pEndo -> do
-      advanceColorWheel
-      p <- applyEndo pEndo <$> getDefaultPlotParam
-      -- Compute style of markers
-      let mPstyle = do
-            s <- p ^. plotMarker . markerStyle . _Wrapped
-            Just PointStyle
-              { _point_color        = fromMaybe (p ^. plotMainColor . _Wrapped)
-                                    $ p ^. plotMarker . markerColor . _Wrapped
-              , _point_border_color = p ^. plotMarker . markerBorderColor . _Wrapped
-              , _point_border_width = p ^. plotMarker . markerBorderWidth . _Wrapped
-              , _point_radius       = p ^. plotMarker . markerRadius . _Wrapped
-              , _point_shape        = s
-              }
-      forM_ mPstyle $ \style ->
-        forM_ xy $ \(x,y) ->
-          liftedDrawPoint style $ Point x y
-      -- Compute style of lines
-      let mLstyle = do
-            s <- p ^. plotLines . lineDashes . _Wrapped
-            Just LineStyle
-              { _line_color  = fromMaybe (p ^. plotMainColor . _Wrapped)
-                             $ p ^. plotLines . lineColor  . _Wrapped
-              , _line_width  = p ^. plotLines . lineWidth  . _Wrapped
-              , _line_dashes = s
-              , _line_cap    = p ^. plotLines . lineCap    . _Wrapped
-              , _line_join   = p ^. plotLines . lineJoin   . _Wrapped
-              }
-      forM_ mLstyle $ \style -> do
-        liftedDrawLines style $ uncurry Point <$> xy
+  { plotFunction  = scatterplotRender xy
   , plotPointData = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
-  , plotParam     = mempty
+  , plotParam     = mempty & prop (#line . #shape) .~ Nothing
   }
+
+lineplot :: [(Double,Double)] -> PlotObj Numeric Numeric
+lineplot xy = PlotObj
+  { plotFunction  = scatterplotRender xy
+  , plotPointData = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
+  , plotParam     = mempty & prop (#marker . #shape) .~ Nothing
+  }
+
+scatterplotRender :: [(Double, Double)] -> PlotParam Endo -> Drawing ()
+scatterplotRender xy pEndo = do
+  advanceColorWheel
+  p <- applyEndo pEndo <$> getDefaultPlotParam
+  -- Compute style of markers
+  let mPstyle = do
+        s <- p ^. plotMarker . markerStyle . _Wrapped
+        Just PointStyle
+          { _point_color        = fromMaybe (p ^. plotMainColor . _Wrapped)
+                                $ p ^. plotMarker . markerColor . _Wrapped
+          , _point_border_color = p ^. plotMarker . markerBorderColor . _Wrapped
+          , _point_border_width = p ^. plotMarker . markerBorderWidth . _Wrapped
+          , _point_radius       = p ^. plotMarker . markerRadius . _Wrapped
+          , _point_shape        = s
+          }
+  forM_ mPstyle $ \style ->
+    forM_ xy $ \(x,y) ->
+      liftedDrawPoint style $ Point x y
+  -- Compute style of lines
+  let mLstyle = do
+        s <- p ^. plotLines . lineDashes . _Wrapped
+        Just LineStyle
+          { _line_color  = fromMaybe (p ^. plotMainColor . _Wrapped)
+                         $ p ^. plotLines . lineColor  . _Wrapped
+          , _line_width  = p ^. plotLines . lineWidth  . _Wrapped
+          , _line_dashes = s
+          , _line_cap    = p ^. plotLines . lineCap    . _Wrapped
+          , _line_join   = p ^. plotLines . lineJoin   . _Wrapped
+          }
+  forM_ mLstyle $ \style -> do
+    liftedDrawLines style $ uncurry Point <$> xy
 
 
 x2,x3 :: [(Double,Double)]
@@ -182,9 +192,13 @@ x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
 
 go = plot
   [ scatterplot x2
-    & prop #color .~ opaque blue
-    & prop (#marker . #size) .~ (4 :: Double)
-  , scatterplot x3 & prop #color .~ opaque red
+ --   & prop #color .~ opaque blue
+    & prop (#marker . #size)  .~ 4
+    & prop (#marker . #shape) .~ Just PointShapeStar
+    & prop #marker . markerBorderWidth . endoL .~ 1
+    & prop #marker . markerBorderColor . endoL .~ opaque green
+  , lineplot x3
+    -- & prop #color .~ opaque red
   ]
   & prop #xlim .~ (Nothing, Just 1)
 
@@ -220,24 +234,29 @@ instance ( AxisValue y ~ ylim, AxisValue y ~ ylim'
 -- Plot object properties
 
 instance (a ~ Double) => IsLabel "color" (Property (AlphaColour a) (PlotObj x y)) where
-  fromLabel = Property paramL . fromLabel @"color"
+  fromLabel = Property paramL . #color
 
 instance (p ~ MarkerParam Endo) => IsLabel "marker" (Property p (PlotObj x y)) where
-  fromLabel = Property (paramL . plotMarker)
+  fromLabel = Property paramL . #marker
 
 instance (p ~ LineParam Endo) => IsLabel "line" (Property p (PlotObj x y)) where
-  fromLabel = Property (paramL . plotLines)
+  fromLabel = Property paramL . #line
 
 
 
 instance (a ~ Double) => IsLabel "color" (Property (AlphaColour a) (PlotParam Endo)) where
   fromLabel = Property $ plotMainColor . endoL
 
+instance (p ~ MarkerParam Endo) => IsLabel "marker" (Property p (PlotParam Endo)) where
+  fromLabel = Property plotMarker
+
+instance (p ~ LineParam Endo) => IsLabel "line" (Property p (PlotParam Endo)) where
+  fromLabel = Property plotLines
 
 ----------------------------------------
 -- Marker
 
-instance IsLabel "shape" (Property (Maybe PointShape) (MarkerParam Endo)) where
+instance (p ~ PointShape) => IsLabel "shape" (Property (Maybe p) (MarkerParam Endo)) where
   fromLabel = Property $ markerStyle . endoL
 
 instance IsLabel "shape" (Property PointShape (MarkerParam Endo)) where
@@ -246,8 +265,14 @@ instance IsLabel "shape" (Property PointShape (MarkerParam Endo)) where
       fun f Nothing  = Just <$> f PointShapeCircle
       fun f (Just x) = Just <$> f x
 
-instance IsLabel "size" (Property Double (MarkerParam Endo)) where
+instance a ~ Double => IsLabel "size" (Property a (MarkerParam Endo)) where
   fromLabel = Property $ markerRadius . endoL
+
+----------------------------------------
+-- Line
+
+instance (p ~ [Double]) => IsLabel "shape" (Property (Maybe p) (LineParam Endo)) where
+  fromLabel = Property $ lineDashes . endoL
 
 
 ----------------------------------------
