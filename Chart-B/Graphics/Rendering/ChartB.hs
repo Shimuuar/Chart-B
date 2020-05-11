@@ -21,6 +21,7 @@ import Data.Coerce
 import Data.Foldable
 import Data.Maybe
 import Data.Proxy
+import Data.Ord
 import Control.Category
 import Control.Monad
 import Control.Lens
@@ -32,6 +33,8 @@ import Prelude hiding (id,(.))
 import Data.Colour
 import Data.Colour.Names
 import GHC.OverloadedLabels (IsLabel(..))
+
+import qualified Graphics.Rendering.Chart.Axis.Floating as Axis
 
 import Graphics.Rendering.ChartB.PlotParam
 import Graphics.Rendering.ChartB.Class
@@ -74,19 +77,32 @@ makePlot Plot{ plotObjects = (mconcat -> plt), ..} = save $ fillBackground def $
           -- Merge range estimates
           (xA,xB) = fromRange rngX axisLimitX
           (yA,yB) = fromRange rngY axisLimitY
+          dX      = xB - xA
+          dY      = yB - yA
           plotTransform = Matrix
-            { xx = 1/(xB-xA), yx = 0
-            , xy = 0        , yy = 1/(yB-yA)
-            , x0 = -xA / (xB - xA)
-            , y0 = -yA / (yB - yA)
+            { xx = 1/dX, yx = 0
+            , xy = 0   , yy = 1/dY
+            , x0 = -xA / dX
+            , y0 = -yA / dX
             }
       let tr = plotTransform * viewportTransform
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
         $ runDrawing tr $ plotFunction plt (plotParam plt)
       -- Plot axes on top of everything else
       alignStrokePoints [ transformL viewportTransform p
-                        | p <- [Point 0 0, Point 0 1, Point 1 1,Point 1 0, Point 0 0]
+                        | p <- [Point 0 0, Point 0 1]
                         ] >>= strokePointPath
+      alignStrokePoints [ transformL viewportTransform p
+                        | p <- [Point 0 0, Point 1 0]
+                        ] >>= strokePointPath
+      -- Plot ticks
+      let ticksX = map realToFrac $ steps 5 (xA,xB)
+      withLineStyle def $ do
+        forM_ ticksX $ \x ->
+          alignStrokePoints [ transformL tr p
+                            | p <- [Point x yA, Point x (yA + 1*dY)]
+                            ]
+            >>= strokePointPath
       return (const Nothing)
   }
   where
@@ -314,3 +330,27 @@ filterAxisY predY (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX stepY
   -> fun (\a x y -> if predY y then stepXY a x y else a)
          stepX
          (\a y   -> if predY y then stepY  a y   else a)
+
+
+
+----------------------------------------------------------------
+
+steps :: RealFloat a => a -> (a,a) -> [Rational]
+steps nSteps rs@(minV,maxV) = map ((s*) . fromIntegral) [min' .. max']
+  where
+    s    = chooseStep nSteps rs
+    min' :: Integer
+    min' = ceiling $ realToFrac minV / s
+    max' = floor   $ realToFrac maxV / s
+
+chooseStep :: RealFloat a => a -> (a,a) -> Rational
+chooseStep nsteps (x1,x2) = minimumBy (comparing proximity) stepVals
+  where
+    delta = x2 - x1
+    mult  | delta == 0 = 1  -- Otherwise the case below will use all of memory
+          | otherwise  = 10 ^^ ((floor $ log10 $ delta / nsteps)::Int)
+    stepVals    = map (mult*) [0.1,0.2,0.25,0.5,1.0,2.0,2.5,5.0,10,20,25,50]
+    proximity x = abs $ delta / realToFrac x - nsteps
+
+log10 :: (Floating a) => a -> a
+log10 = logBase 10
