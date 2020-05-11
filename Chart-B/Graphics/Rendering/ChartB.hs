@@ -41,6 +41,7 @@ import Graphics.Rendering.ChartB.Class
 import Graphics.Rendering.ChartB.Impl.Drawing
 import Graphics.Rendering.ChartB.Impl.Axis
 
+import Debug.Trace
 
 save :: Renderable r -> IO ()
 save = void . Cairo.renderableToFile
@@ -83,7 +84,7 @@ makePlot Plot{ plotObjects = (mconcat -> plt), ..} = save $ fillBackground def $
             { xx = 1/dX, yx = 0
             , xy = 0   , yy = 1/dY
             , x0 = -xA / dX
-            , y0 = -yA / dX
+            , y0 = -yA / dY
             }
       let tr = plotTransform * viewportTransform
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
@@ -97,12 +98,23 @@ makePlot Plot{ plotObjects = (mconcat -> plt), ..} = save $ fillBackground def $
                         ] >>= strokePointPath
       -- Plot ticks
       let ticksX = map realToFrac $ steps 5 (xA,xB)
+          ticksY = map realToFrac $ steps 5 (yA,yB)
       withLineStyle def $ do
         forM_ ticksX $ \x ->
           alignStrokePoints [ transformL tr p
-                            | p <- [Point x yA, Point x (yA + 1*dY)]
+                            | p <- [Point x yA, Point x (yA + 0.015*dY)]
                             ]
             >>= strokePointPath
+        forM_ ticksY $ \y ->
+          alignStrokePoints (let Point px py = transformL tr $ Point xA y
+                             in [ Point px py, Point (px+5) py ]
+                            )
+            >>= strokePointPath
+      withFontStyle def $ do
+        forM_ ticksX $ \x ->
+          drawTextA HTA_Centre VTA_Top (transformL tr (Point x yA)) (show x)
+        forM_ ticksY $ \y ->
+          drawTextA HTA_Right VTA_Centre (transformL tr (Point xA y)) (show y)
       return (const Nothing)
   }
   where
@@ -164,8 +176,8 @@ scatterplot xy = PlotObj
 
 
 x2,x3 :: [(Double,Double)]
-x2 = [(x,x*x)   | x <- [0, 1e-2 .. 1.3 ]]
-x3 = [(x,x*x*x) | x <- [0, 1e-2 .. 1   ]]
+x2 = [(x,x*x)   | x <- [0.3, 0.31 .. 1 ]]
+x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
 
 
 go = plot
