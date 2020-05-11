@@ -52,4 +52,4 @@ liftedDrawPoint st p = do
 liftedDrawLines :: LineStyle -> [Point] -> Drawing ()
 liftedDrawLines style pts = Drawing $ do
   tr <- ask
-  lift $ lift $ withLineStyle style $ alignStrokePoints (transformL tr <$> pts) >>= strokePointPath
+  lift $ lift $ withLineStyle style $ return (transformL tr <$> pts) >>= strokePointPath
