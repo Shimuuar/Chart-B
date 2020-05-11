@@ -35,6 +35,7 @@ import GHC.OverloadedLabels (IsLabel(..))
 import Graphics.Rendering.ChartB.PlotParam
 import Graphics.Rendering.ChartB.Class
 import Graphics.Rendering.ChartB.Impl.Drawing
+import Graphics.Rendering.ChartB.Impl.Axis
 
 
 save :: Renderable r -> IO ()
@@ -57,8 +58,8 @@ makePlot plt = save $ fillBackground def $ Renderable
             , y0 = h*(1-marginAxis)
             }
       -- Compute axes range
-      let pointFold = filterAxisX (filterAxisValues (Proxy @Numeric) (limitX plt))
-                    $ filterAxisY (filterAxisValues (Proxy @Numeric) (limitY plt))
+      let pointFold = filterAxisX (axisValueInRange (Proxy @Numeric) (limitX plt))
+                    $ filterAxisY (axisValueInRange (Proxy @Numeric) (limitY plt))
                     $ pointData plt
           -- Compute ranges for points that can appear in selected range:
           rngX = foldOverAxes pointFold (\m x _ -> m <> numLim x)
@@ -283,46 +284,3 @@ filterAxisY predY (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX stepY
   -> fun (\a x y -> if predY y then stepXY a x y else a)
          stepX
          (\a y   -> if predY y then stepY  a y   else a)
-
-
-
-----------------------------------------------------------------
--- Axes
-----------------------------------------------------------------
-
-
-class Axis a where
-  type AxisValue a
-  filterAxisValues :: Proxy a -> (Maybe (AxisValue a), Maybe (AxisValue a)) -> AxisValue a -> Bool
-
-
-data Numeric
-
-
-
-data NumLimits
-  = UnknownLim
-  | MinMaxLimits !Double !Double
-  deriving (Show)
-
-instance Semigroup NumLimits where
-  UnknownLim <> x = x
-  x <> UnknownLim = x
-  MinMaxLimits a1 b1 <> MinMaxLimits a2 b2 = MinMaxLimits (min a1 a2) (max b1 b2)
-
-numLim :: Double -> NumLimits
-numLim x = MinMaxLimits x x
-
-instance Monoid NumLimits where
-  mempty = UnknownLim
-
-instance Axis Numeric where
-  type AxisValue Numeric = Double
-  filterAxisValues _ (Nothing, Nothing) _ = True
-  filterAxisValues _ (Just a,  Nothing) x = x >= a
-  filterAxisValues _ (Nothing, Just b ) x = x <= b
-  filterAxisValues _ (Just a,  Just b ) x = x >= a && x <= b
-
-
-data Time
-data Categori
