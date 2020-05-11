@@ -35,7 +35,7 @@ import Data.Colour.Names
 import GHC.OverloadedLabels (IsLabel(..))
 
 import Graphics.Rendering.ChartB.PlotParam
-
+import Graphics.Rendering.ChartB.Class
 
 
 save :: Renderable r -> IO ()
@@ -329,19 +329,6 @@ data Time
 data Categori
 
 
-
-----------------------------------------------------------------
---
-----------------------------------------------------------------
-
-class Transformable a where
-  transformL :: Matrix -> a -> a
-
-instance Transformable Point where
-  transformL = transformP
-
-instance Transformable Rect where
-  transformL m (Rect p1 p2) = Rect (transformL m p1) (transformL m p2)
 
 
 ----------------------------------------------------------------

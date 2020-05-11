@@ -35,3 +35,4 @@ library
   Exposed-modules:
         Graphics.Rendering.ChartB
         Graphics.Rendering.ChartB.PlotParam
+        Graphics.Rendering.ChartB.Class
