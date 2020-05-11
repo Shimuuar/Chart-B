@@ -22,8 +22,6 @@ import Data.Maybe
 import Data.Proxy
 import Control.Category
 import Control.Monad
-import Control.Monad.State.Strict
-import Control.Monad.Reader
 import Control.Lens
 import qualified Graphics.Rendering.Chart.Backend.Cairo as Cairo
 import Graphics.Rendering.Chart.Renderable
@@ -36,6 +34,7 @@ import GHC.OverloadedLabels (IsLabel(..))
 
 import Graphics.Rendering.ChartB.PlotParam
 import Graphics.Rendering.ChartB.Class
+import Graphics.Rendering.ChartB.Impl.Drawing
 
 
 save :: Renderable r -> IO ()
@@ -327,41 +326,3 @@ instance Axis Numeric where
 
 data Time
 data Categori
-
-
-
-
-----------------------------------------------------------------
--- Drawing monad
-----------------------------------------------------------------
-
-newtype Drawing a = Drawing (StateT [AlphaColour Double] (ReaderT Matrix BackendProgram) a)
-  deriving newtype (Functor, Applicative, Monad)
-
-runDrawing :: Matrix -> Drawing a -> BackendProgram a
-runDrawing tr (Drawing act)
-  = flip runReaderT tr
-  $ evalStateT act defColors
-  where
-    defColors = opaque black
-              : cycle (map opaque $ [blue, red, green, yellow, cyan, magenta])
-
-
-advanceColorWheel :: Drawing ()
-advanceColorWheel = Drawing $ modify tail
-
-getDefaultPlotParam :: Drawing (PlotParam Identity)
-getDefaultPlotParam = Drawing $ do
-  c <- head <$> get
-  return $ def & plotMainColor . _Wrapped .~ c
-
-liftedDrawPoint :: PointStyle -> Point -> Drawing ()
-liftedDrawPoint st p = do
-  tr <- Drawing ask
-  Drawing $ lift $ lift $ drawPoint st (transformL tr p)
-
-
-liftedDrawLines :: LineStyle -> [Point] -> Drawing ()
-liftedDrawLines style pts = Drawing $ do
-  tr <- ask
-  lift $ lift $ withLineStyle style $ alignStrokePoints (transformL tr <$> pts) >>= strokePointPath

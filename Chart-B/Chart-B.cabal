@@ -36,3 +36,4 @@ library
         Graphics.Rendering.ChartB
         Graphics.Rendering.ChartB.PlotParam
         Graphics.Rendering.ChartB.Class
+        Graphics.Rendering.ChartB.Impl.Drawing

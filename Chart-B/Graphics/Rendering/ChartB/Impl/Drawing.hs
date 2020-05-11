@@ -1,0 +1,55 @@
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- |
+module Graphics.Rendering.ChartB.Impl.Drawing where
+
+import Control.Lens
+import Control.Monad.State.Strict
+import Control.Monad.Reader
+import Data.Default.Class
+import Data.Colour
+import Data.Colour.Names
+import Graphics.Rendering.Chart.Drawing
+import Graphics.Rendering.Chart.Geometry
+
+import Graphics.Rendering.ChartB.Class
+import Graphics.Rendering.ChartB.PlotParam
+
+
+----------------------------------------------------------------
+-- Drawing monad
+----------------------------------------------------------------
+
+-- | Wrapper on top of BackendProgram for drawing. It keeps track of
+--   current viewport transformation and color wheel.
+newtype Drawing a = Drawing (StateT [AlphaColour Double] (ReaderT Matrix BackendProgram) a)
+  deriving newtype (Functor, Applicative, Monad)
+
+-- | Execute drawing program
+runDrawing :: Matrix -> Drawing a -> BackendProgram a
+runDrawing tr (Drawing act)
+  = flip runReaderT tr
+  $ evalStateT act defColors
+  where
+    -- Since each plot advances color wheel before we start plotting
+    -- we have to add dummy value in from
+    defColors = opaque blue
+              : cycle (map opaque $ [blue, red, green, yellow, cyan, magenta])
+
+advanceColorWheel :: Drawing ()
+advanceColorWheel = Drawing $ modify tail
+
+getDefaultPlotParam :: Drawing (PlotParam Identity)
+getDefaultPlotParam = Drawing $ do
+  c <- head <$> get
+  return $ def & plotMainColor . _Wrapped .~ c
+
+liftedDrawPoint :: PointStyle -> Point -> Drawing ()
+liftedDrawPoint st p = do
+  tr <- Drawing ask
+  Drawing $ lift $ lift $ drawPoint st (transformL tr p)
+
+liftedDrawLines :: LineStyle -> [Point] -> Drawing ()
+liftedDrawLines style pts = Drawing $ do
+  tr <- ask
+  lift $ lift $ withLineStyle style $ alignStrokePoints (transformL tr <$> pts) >>= strokePointPath
