@@ -113,8 +113,8 @@ scatterplot xy = PlotObj
   { plot = \pEndo -> do
       advanceColorWheel
       p <- applyEndo pEndo <$> getDefaultPlotParam
-      -- Compute sttyle of markers
-      let mstyle = do
+      -- Compute style of markers
+      let mPstyle = do
             s <- p ^. plotMarker . markerStyle . _Wrapped
             Just PointStyle
               { _point_color        = fromMaybe (p ^. plotMainColor . _Wrapped)
@@ -124,9 +124,22 @@ scatterplot xy = PlotObj
               , _point_radius       = p ^. plotMarker . markerRadius . _Wrapped
               , _point_shape        = s
               }
-      forM_ mstyle $ \style -> 
+      forM_ mPstyle $ \style ->
         forM_ xy $ \(x,y) ->
           liftedDrawPoint style $ Point x y
+      -- Compute style of lines
+      let mLstyle = do
+            s <- p ^. plotLines . lineDashes . _Wrapped
+            Just LineStyle
+              { _line_color  = fromMaybe (p ^. plotMainColor . _Wrapped)
+                             $ p ^. plotLines . lineColor  . _Wrapped
+              , _line_width  = p ^. plotLines . lineWidth  . _Wrapped
+              , _line_dashes = s
+              , _line_cap    = p ^. plotLines . lineCap    . _Wrapped
+              , _line_join   = p ^. plotLines . lineJoin   . _Wrapped
+              }
+      forM_ mLstyle $ \style -> do
+        liftedDrawLines style $ uncurry Point <$> xy
   , pointData  = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
   , limitX = (Nothing, Nothing)
   , limitY = (Nothing, Nothing)
@@ -360,3 +373,8 @@ liftedDrawPoint st p = do
   tr <- Drawing ask
   Drawing $ lift $ lift $ drawPoint st (transformL tr p)
 
+
+liftedDrawLines :: LineStyle -> [Point] -> Drawing ()
+liftedDrawLines style pts = Drawing $ do
+  tr <- ask
+  lift $ lift $ withLineStyle style $ alignStrokePoints (transformL tr <$> pts) >>= strokePointPath
