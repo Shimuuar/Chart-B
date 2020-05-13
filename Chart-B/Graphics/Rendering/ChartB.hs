@@ -164,7 +164,8 @@ scatterplotRender xy pEndo = do
         Just PointStyle
           { _point_color        = fromMaybe (p ^. plotMainColor)
                                 $ p ^. plotMarker . markerColor
-          , _point_border_color = p ^. plotMarker . markerBorderColor
+          , _point_border_color = fromMaybe (p ^. plotMainColor)
+                                $ p ^. plotMarker . markerBorderColor
           , _point_border_width = p ^. plotMarker . markerBorderWidth
           , _point_radius       = p ^. plotMarker . markerRadius
           , _point_shape        = s
@@ -194,10 +195,10 @@ x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
 
 go = plot
   [ scatterplot x2
-    & prop (#marker . #size)  .~ 4
-    & prop (#marker . #shape) .~ Just PointShapeStar
-    & prop #marker . markerBorderWidth .~ 1
-    & prop #marker . markerBorderColor .~ opaque green
+    & prop (#marker . #size)        .~ 4
+    & prop (#marker . #shape)       .~ Just PointShapeStar
+    & prop (#marker . #borderwidth) .~ 1
+    -- & prop #marker . markerBorderColor .~ Just (opaque green)
   , lineplot x3
   ]
   & prop #xlim .~ (Nothing, Just 1)
@@ -225,6 +226,11 @@ instance Category Property where
   id = id
   Property f . Property g = Property (f . g)
 
+
+instance IsLabel l (Property p a) => IsLabel l (Property p (Endo a)) where
+  fromLabel = Property endoL . fromLabel @l
+
+
 ----------------------------------------
 -- Plot axes properties
 
@@ -240,15 +246,9 @@ instance ( AxisValue y ~ ylim, AxisValue y ~ ylim'
 ----------------------------------------
 -- Plot object properties
 
-instance (a ~ Double) => IsLabel "color" (Property (AlphaColour a) (PlotObj x y)) where
-  fromLabel = Property paramL . #color
-
-instance (p ~ MarkerParam) => IsLabel "marker" (Property p (PlotObj x y)) where
-  fromLabel = Property paramL . #marker
-
-instance (p ~ LineParam) => IsLabel "line" (Property p (PlotObj x y)) where
-  fromLabel = Property paramL . #line
-
+instance IsLabel l (Property p PlotParam) => IsLabel l  (Property p (PlotObj x y)) where
+  fromLabel = Property (lens plotParam (\x p -> x { plotParam = p }))
+            . fromLabel @l
 
 
 instance (a ~ Double)      => IsLabel "color"  (Property (AlphaColour a) PlotParam) where
@@ -261,9 +261,6 @@ instance (p ~ LineParam)   => IsLabel "line"   (Property p PlotParam) where
   fromLabel = Property plotLines
 
 
-instance IsLabel l (Property p PlotParam) => IsLabel l (Property p (Endo PlotParam)) where
-  fromLabel = Property endoL . fromLabel @l
-
 
 ----------------------------------------
 -- Marker
@@ -272,13 +269,22 @@ instance (p ~ PointShape) => IsLabel "shape" (Property (Maybe p) MarkerParam) wh
   fromLabel = Property markerStyle
 
 instance IsLabel "shape" (Property PointShape MarkerParam) where
-  fromLabel = Property markerStyle . Property fun
-    where
-      fun f Nothing  = Just <$> f PointShapeCircle
-      fun f (Just x) = Just <$> f x
+  fromLabel = #shape . nonProp PointShapeCircle
 
 instance a ~ Double => IsLabel "size" (Property a MarkerParam) where
   fromLabel = Property markerRadius
+
+instance a ~ Double => IsLabel "borderwidth" (Property a MarkerParam) where
+  fromLabel = Property markerBorderWidth
+
+instance a ~ AlphaColour Double => IsLabel "bordercolor" (Property (Maybe a) MarkerParam) where
+  fromLabel = Property markerBorderColor
+
+instance a ~ Double => IsLabel "bordercolor" (Property (AlphaColour a) MarkerParam) where
+  fromLabel = #bordercolor . nonProp (opaque black)
+
+instance a ~ PointShape => IsLabel "style" (Property (Maybe a) MarkerParam) where
+  fromLabel = Property markerStyle
 
 ----------------------------------------
 -- Line
@@ -286,12 +292,8 @@ instance a ~ Double => IsLabel "size" (Property a MarkerParam) where
 instance (p ~ [Double]) => IsLabel "shape" (Property (Maybe p) LineParam) where
   fromLabel = Property lineDashes
 
-
-----------------------------------------
--- Helpers
-
-paramL :: Lens' (PlotObj x y) (Endo PlotParam)
-paramL = lens plotParam (\x p -> x { plotParam = p })
+nonProp :: a -> Property a (Maybe a)
+nonProp x0 = Property $ \f -> fmap Just . f . fromMaybe x0
 
 
 ----------------------------------------------------------------

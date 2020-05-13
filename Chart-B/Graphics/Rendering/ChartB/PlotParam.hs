@@ -26,7 +26,7 @@ data PlotParam = PlotParam
 
 data MarkerParam = MarkerParam
   { _markerColor       :: Maybe (AlphaColour Double)
-  , _markerBorderColor :: AlphaColour Double
+  , _markerBorderColor :: Maybe (AlphaColour Double)
   , _markerBorderWidth :: Double
   , _markerRadius      :: Double
   , _markerStyle       :: Maybe PointShape
@@ -51,7 +51,7 @@ instance Default PlotParam where
 instance Default MarkerParam where
   def = MarkerParam
     { _markerColor       = Nothing
-    , _markerBorderColor = transparent
+    , _markerBorderColor = Nothing
     , _markerBorderWidth = 0
     , _markerRadius      = 1
     , _markerStyle       = Just PointShapeCircle
