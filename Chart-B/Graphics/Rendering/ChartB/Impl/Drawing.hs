@@ -39,10 +39,10 @@ runDrawing tr (Drawing act)
 advanceColorWheel :: Drawing ()
 advanceColorWheel = Drawing $ modify tail
 
-getDefaultPlotParam :: Drawing (PlotParam Identity)
+getDefaultPlotParam :: Drawing PlotParam
 getDefaultPlotParam = Drawing $ do
   c <- head <$> get
-  return $ def & plotMainColor . _Wrapped .~ c
+  return $ def & plotMainColor .~ c
 
 liftedDrawPoint :: PointStyle -> Point -> Drawing ()
 liftedDrawPoint st p = do

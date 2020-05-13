@@ -142,29 +142,31 @@ scatterplot :: [(Double,Double)] -> PlotObj Numeric Numeric
 scatterplot xy = PlotObj
   { plotFunction  = scatterplotRender xy
   , plotPointData = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
-  , plotParam     = mempty & prop (#line . #shape) .~ Nothing
+  , plotParam     = mempty
+                  & prop (#line . #shape) .~ Nothing
   }
 
 lineplot :: [(Double,Double)] -> PlotObj Numeric Numeric
 lineplot xy = PlotObj
   { plotFunction  = scatterplotRender xy
   , plotPointData = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
-  , plotParam     = mempty & prop (#marker . #shape) .~ Nothing
+  , plotParam     = mempty
+                  & prop (#marker . #shape) .~ Nothing
   }
 
-scatterplotRender :: [(Double, Double)] -> PlotParam Endo -> Drawing ()
+scatterplotRender :: [(Double, Double)] -> Endo PlotParam -> Drawing ()
 scatterplotRender xy pEndo = do
   advanceColorWheel
-  p <- applyEndo pEndo <$> getDefaultPlotParam
+  p <- appEndo pEndo <$> getDefaultPlotParam
   -- Compute style of markers
   let mPstyle = do
-        s <- p ^. plotMarker . markerStyle . _Wrapped
+        s <- p ^. plotMarker . markerStyle
         Just PointStyle
-          { _point_color        = fromMaybe (p ^. plotMainColor . _Wrapped)
-                                $ p ^. plotMarker . markerColor . _Wrapped
-          , _point_border_color = p ^. plotMarker . markerBorderColor . _Wrapped
-          , _point_border_width = p ^. plotMarker . markerBorderWidth . _Wrapped
-          , _point_radius       = p ^. plotMarker . markerRadius . _Wrapped
+          { _point_color        = fromMaybe (p ^. plotMainColor)
+                                $ p ^. plotMarker . markerColor
+          , _point_border_color = p ^. plotMarker . markerBorderColor
+          , _point_border_width = p ^. plotMarker . markerBorderWidth
+          , _point_radius       = p ^. plotMarker . markerRadius
           , _point_shape        = s
           }
   forM_ mPstyle $ \style ->
@@ -172,14 +174,14 @@ scatterplotRender xy pEndo = do
       liftedDrawPoint style $ Point x y
   -- Compute style of lines
   let mLstyle = do
-        s <- p ^. plotLines . lineDashes . _Wrapped
+        s <- p ^. plotLines . lineDashes
         Just LineStyle
-          { _line_color  = fromMaybe (p ^. plotMainColor . _Wrapped)
-                         $ p ^. plotLines . lineColor  . _Wrapped
-          , _line_width  = p ^. plotLines . lineWidth  . _Wrapped
+          { _line_color  = fromMaybe (p ^. plotMainColor)
+                         $ p ^. plotLines . lineColor
+          , _line_width  = p ^. plotLines . lineWidth
           , _line_dashes = s
-          , _line_cap    = p ^. plotLines . lineCap    . _Wrapped
-          , _line_join   = p ^. plotLines . lineJoin   . _Wrapped
+          , _line_cap    = p ^. plotLines . lineCap
+          , _line_join   = p ^. plotLines . lineJoin
           }
   forM_ mLstyle $ \style -> do
     liftedDrawLines style $ uncurry Point <$> xy
@@ -192,13 +194,11 @@ x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
 
 go = plot
   [ scatterplot x2
- --   & prop #color .~ opaque blue
     & prop (#marker . #size)  .~ 4
     & prop (#marker . #shape) .~ Just PointShapeStar
-    & prop #marker . markerBorderWidth . endoL .~ 1
-    & prop #marker . markerBorderColor . endoL .~ opaque green
+    & prop #marker . markerBorderWidth .~ 1
+    & prop #marker . markerBorderColor .~ opaque green
   , lineplot x3
-    -- & prop #color .~ opaque red
   ]
   & prop #xlim .~ (Nothing, Just 1)
 
@@ -206,6 +206,13 @@ go2 = plot
   [ scatterplot x2
   , scatterplot x3
   ]
+
+go3 = plot
+  [ (scatterplot x2 <> lineplot x3)
+  & prop #color .~ opaque green
+  ]
+  & prop #xlim .~ (Nothing, Just 1)
+
 
 
 ----------------------------------------------------------------
@@ -236,49 +243,54 @@ instance ( AxisValue y ~ ylim, AxisValue y ~ ylim'
 instance (a ~ Double) => IsLabel "color" (Property (AlphaColour a) (PlotObj x y)) where
   fromLabel = Property paramL . #color
 
-instance (p ~ MarkerParam Endo) => IsLabel "marker" (Property p (PlotObj x y)) where
+instance (p ~ MarkerParam) => IsLabel "marker" (Property p (PlotObj x y)) where
   fromLabel = Property paramL . #marker
 
-instance (p ~ LineParam Endo) => IsLabel "line" (Property p (PlotObj x y)) where
+instance (p ~ LineParam) => IsLabel "line" (Property p (PlotObj x y)) where
   fromLabel = Property paramL . #line
 
 
 
-instance (a ~ Double) => IsLabel "color" (Property (AlphaColour a) (PlotParam Endo)) where
-  fromLabel = Property $ plotMainColor . endoL
+instance (a ~ Double)      => IsLabel "color"  (Property (AlphaColour a) PlotParam) where
+  fromLabel = Property plotMainColor
 
-instance (p ~ MarkerParam Endo) => IsLabel "marker" (Property p (PlotParam Endo)) where
+instance (p ~ MarkerParam) => IsLabel "marker" (Property p PlotParam) where
   fromLabel = Property plotMarker
 
-instance (p ~ LineParam Endo) => IsLabel "line" (Property p (PlotParam Endo)) where
+instance (p ~ LineParam)   => IsLabel "line"   (Property p PlotParam) where
   fromLabel = Property plotLines
+
+
+instance IsLabel l (Property p PlotParam) => IsLabel l (Property p (Endo PlotParam)) where
+  fromLabel = Property endoL . fromLabel @l
+
 
 ----------------------------------------
 -- Marker
 
-instance (p ~ PointShape) => IsLabel "shape" (Property (Maybe p) (MarkerParam Endo)) where
-  fromLabel = Property $ markerStyle . endoL
+instance (p ~ PointShape) => IsLabel "shape" (Property (Maybe p) MarkerParam) where
+  fromLabel = Property markerStyle
 
-instance IsLabel "shape" (Property PointShape (MarkerParam Endo)) where
-  fromLabel = Property $ markerStyle . endoL . fun
+instance IsLabel "shape" (Property PointShape MarkerParam) where
+  fromLabel = Property markerStyle . Property fun
     where
       fun f Nothing  = Just <$> f PointShapeCircle
       fun f (Just x) = Just <$> f x
 
-instance a ~ Double => IsLabel "size" (Property a (MarkerParam Endo)) where
-  fromLabel = Property $ markerRadius . endoL
+instance a ~ Double => IsLabel "size" (Property a MarkerParam) where
+  fromLabel = Property markerRadius
 
 ----------------------------------------
 -- Line
 
-instance (p ~ [Double]) => IsLabel "shape" (Property (Maybe p) (LineParam Endo)) where
-  fromLabel = Property $ lineDashes . endoL
+instance (p ~ [Double]) => IsLabel "shape" (Property (Maybe p) LineParam) where
+  fromLabel = Property lineDashes
 
 
 ----------------------------------------
 -- Helpers
 
-paramL :: Lens' (PlotObj x y) (PlotParam Endo)
+paramL :: Lens' (PlotObj x y) (Endo PlotParam)
 paramL = lens plotParam (\x p -> x { plotParam = p })
 
 
@@ -300,9 +312,9 @@ data Plot x y = Plot
 
 -- | Single entity on plog
 data PlotObj x y = PlotObj
-  { plotFunction  :: PlotParam Endo -> Drawing ()
+  { plotFunction  :: Endo PlotParam -> Drawing ()
   , plotPointData :: FoldOverAxes x y
-  , plotParam     :: PlotParam Endo
+  , plotParam     :: Endo PlotParam
   }
 
 instance (Axis x, Axis y) => Semigroup (PlotObj x y) where
