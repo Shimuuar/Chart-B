@@ -158,7 +158,20 @@ scatterplotRender :: [(Double, Double)] -> Endo PlotParam -> Drawing ()
 scatterplotRender xy pEndo = do
   advanceColorWheel
   p <- appEndo pEndo <$> getDefaultPlotParam
-  -- Compute style of markers
+  -- Draw lines
+  let mLstyle = do
+        s <- p ^. plotLines . lineDashes
+        Just LineStyle
+          { _line_color  = fromMaybe (p ^. plotMainColor)
+                         $ p ^. plotLines . lineColor
+          , _line_width  = p ^. plotLines . lineWidth
+          , _line_dashes = s
+          , _line_cap    = p ^. plotLines . lineCap
+          , _line_join   = p ^. plotLines . lineJoin
+          }
+  forM_ mLstyle $ \style -> do
+    liftedDrawLines style $ uncurry Point <$> xy
+  -- Draw markers
   let mPstyle = do
         s <- p ^. plotMarker . markerStyle
         Just PointStyle
@@ -173,19 +186,6 @@ scatterplotRender xy pEndo = do
   forM_ mPstyle $ \style ->
     forM_ xy $ \(x,y) ->
       liftedDrawPoint style $ Point x y
-  -- Compute style of lines
-  let mLstyle = do
-        s <- p ^. plotLines . lineDashes
-        Just LineStyle
-          { _line_color  = fromMaybe (p ^. plotMainColor)
-                         $ p ^. plotLines . lineColor
-          , _line_width  = p ^. plotLines . lineWidth
-          , _line_dashes = s
-          , _line_cap    = p ^. plotLines . lineCap
-          , _line_join   = p ^. plotLines . lineJoin
-          }
-  forM_ mLstyle $ \style -> do
-    liftedDrawLines style $ uncurry Point <$> xy
 
 
 x2,x3 :: [(Double,Double)]
