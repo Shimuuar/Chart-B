@@ -173,10 +173,36 @@ scatterplotRender optic xy pEndo = do
           , _point_shape        = s
           }
   forM_ mPstyle $ \style ->
-    forMOf_ optic xy $ \(x,y) ->
+    forMOf_ optic xy $ \(x,y) -> do
       liftedDrawPoint style $ Point x y
 
 
+
+data Bar = Bar Double Double Double
+
+barplotOf :: Fold s Bar -> s -> PlotObj Numeric Numeric
+barplotOf optic bars = PlotObj
+  { plotFunction  = \pEndo -> do
+      advanceColorWheel
+      p <- appEndo pEndo <$> getDefaultPlotParam
+      let mLstyle = do
+            s <- p ^. plotLines . lineDashes
+            Just LineStyle
+              { _line_color  = fromMaybe (p ^. plotMainColor)
+                            $ p ^. plotLines . lineColor
+             , _line_width  = p ^. plotLines . lineWidth
+             , _line_dashes = s
+             , _line_cap    = p ^. plotLines . lineCap
+             , _line_join   = p ^. plotLines . lineJoin
+             }
+      forM_ mLstyle $ \style ->
+        forMOf_ optic bars $ \(Bar x1 x2 y) ->
+          liftedDrawLines style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
+  , plotPointData = FoldOverAxes $ \_ stepX stepY a0 ->
+        flip stepY 0
+      $ foldlOf' optic (\a (Bar x1 x2 y) -> flip stepY y $ flip stepX x2 $ flip stepX x1 a) a0 bars
+  , plotParam     = mempty
+  }
 
 
 ----------------------------------------------------------------
@@ -186,7 +212,8 @@ scatterplotRender optic xy pEndo = do
 x2,x3 :: [(Double,Double)]
 x2 = [(x,x*x)   | x <- [0.3, 0.31 .. 1 ]]
 x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
-
+xs :: [Double]
+xs = [0.3, 0.31 .. 1.1 ]
 
 -- go = plot
 --   [ scatterplot x2
@@ -201,6 +228,11 @@ x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
 go2 = plot
   [ scatterplotOf each x2
   , scatterplotOf each x3
+  , scatterplotOf (each . to (\x -> (x,x**2.2))) xs
+  , barplotOf each
+    [ Bar 0.0 0.2 0.3
+    , Bar 0.4 0.5 (-0.2)
+    ]
   ]
 
 -- go3 = plot
