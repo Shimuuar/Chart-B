@@ -133,8 +133,8 @@ scatterplotOf optic xy = PlotObj
                   & prop (#line . #shape) .~ Nothing
   }
 
-lineplot :: (Real a, Real b) => Fold s (a,b) -> s -> PlotObj Numeric Numeric
-lineplot optic xy = PlotObj
+lineplotOf :: (Real a, Real b) => Fold s (a,b) -> s -> PlotObj Numeric Numeric
+lineplotOf optic xy = PlotObj
   { plotFunction  = scatterplotRender (optic . to (realToFrac *** realToFrac)) xy
   , plotPointData = FoldOverAxes $ \stepXY _ _ a0 ->
       foldlOf' optic (\a (x,y) -> stepXY a (realToFrac x) (realToFrac y)) a0 xy
