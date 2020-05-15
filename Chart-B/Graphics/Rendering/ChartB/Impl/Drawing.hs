@@ -34,7 +34,7 @@ runDrawing tr (Drawing act)
     -- Since each plot advances color wheel before we start plotting
     -- we have to add dummy value in from
     defColors = opaque blue
-              : cycle (map opaque $ [blue, red, green, yellow, cyan, magenta])
+              : cycle (map opaque $ [blue, red, green, orange, cyan, magenta])
 
 advanceColorWheel :: Drawing ()
 advanceColorWheel = Drawing $ modify tail
