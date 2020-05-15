@@ -64,18 +64,7 @@ makePlot Plot{ plotObjects = (mconcat -> plt), ..} = save $ fillBackground def $
             , y0 = h*(1-marginAxis)
             }
       -- Compute axes range
-      let pointFold = filterAxisX (axisValueInRange (Proxy @Numeric) axisLimitX)
-                    $ filterAxisY (axisValueInRange (Proxy @Numeric) axisLimitY)
-                    $ plotPointData plt
-          -- Compute ranges for points that can appear in selected range:
-          rngX = foldOverAxes pointFold (\m x _ -> m <> numLim x)
-                                        (\m x   -> m <> numLim x)
-                                        (\m _   -> m)
-                                        mempty
-          rngY = foldOverAxes pointFold (\m _ y -> m <> numLim y)
-                                        (\m _   -> m)
-                                        (\m y   -> m <> numLim y)
-                                        mempty
+      let (rngX,rngY) = estimateRange (plotPointData plt) axisLimitX axisLimitY
           -- Merge range estimates
           (xA,xB) = fromRange rngX axisLimitX
           (yA,yB) = fromRange rngY axisLimitY
@@ -361,36 +350,6 @@ instance Monoid (Plot x y) where
 -- Axes
 ----------------------------------------------------------------
 
--- | Fold which is used to compute maximum and minimum value for
---   axis autorange
-newtype FoldOverAxes x y = FoldOverAxes
-  { foldOverAxes :: forall a. (a -> AxisValue x -> AxisValue y -> a)
-                           -> (a -> AxisValue x -> a)
-                           -> (a -> AxisValue y -> a)
-                           -> (a -> a)
-  }
-
-instance Semigroup (FoldOverAxes x y) where
-  FoldOverAxes f <> FoldOverAxes g = FoldOverAxes $ \stepXY stepX stepY ->
-    g stepXY stepX stepY . f stepXY stepX stepY
-
-instance Monoid (FoldOverAxes x y) where
-  mempty = FoldOverAxes $ \_ _ _ -> id
-
-filterAxisX :: (AxisValue x -> Bool) -> FoldOverAxes x y -> FoldOverAxes x y
-filterAxisX predX (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX
-  -> fun (\a x y -> if predX x then stepXY a x y else a)
-         (\a x   -> if predX x then stepX  a x   else a)
-
-filterAxisY :: (AxisValue y -> Bool) -> FoldOverAxes x y -> FoldOverAxes x y
-filterAxisY predY (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX stepY
-  -> fun (\a x y -> if predY y then stepXY a x y else a)
-         stepX
-         (\a y   -> if predY y then stepY  a y   else a)
-
-
-
-----------------------------------------------------------------
 
 steps :: RealFloat a => a -> (a,a) -> [Rational]
 steps nSteps rs@(minV,maxV) = map ((s*) . fromIntegral) [min' .. max']

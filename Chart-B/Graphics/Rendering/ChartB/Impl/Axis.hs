@@ -1,22 +1,79 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
 -- |
 module Graphics.Rendering.ChartB.Impl.Axis where
 
 import Data.Proxy
 
+
+----------------------------------------------------------------
+-- Generic API for axes
+----------------------------------------------------------------
+
+-- | Fold which is used to compute maximum and minimum value for
+--   axis autorange
+newtype FoldOverAxes x y = FoldOverAxes
+  { foldOverAxes :: forall a. (a -> AxisValue x -> AxisValue y -> a)
+                           -> (a -> AxisValue x -> a)
+                           -> (a -> AxisValue y -> a)
+                           -> (a -> a)
+  }
+
+instance Semigroup (FoldOverAxes x y) where
+  FoldOverAxes f <> FoldOverAxes g = FoldOverAxes $ \stepXY stepX stepY ->
+    g stepXY stepX stepY . f stepXY stepX stepY
+
+instance Monoid (FoldOverAxes x y) where
+  mempty = FoldOverAxes $ \_ _ _ -> id
+
+filterAxisX :: (AxisValue x -> Bool) -> FoldOverAxes x y -> FoldOverAxes x y
+filterAxisX predX (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX
+  -> fun (\a x y -> if predX x then stepXY a x y else a)
+         (\a x   -> if predX x then stepX  a x   else a)
+
+filterAxisY :: (AxisValue y -> Bool) -> FoldOverAxes x y -> FoldOverAxes x y
+filterAxisY predY (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX stepY
+  -> fun (\a x y -> if predY y then stepXY a x y else a)
+         stepX
+         (\a y   -> if predY y then stepY  a y   else a)
+
+
+
 -- | Type class for axis which is classified according to what kind of
 --   data is stored there.
-class Axis a where
-  type AxisValue a
-  -- | True if value
-  axisValueInRange
-    :: Proxy a
-    -- ^ Dummy for type inference
-    -> (Maybe (AxisValue a), Maybe (AxisValue a))
-    -- ^ Range for axis
-    -> AxisValue a
-    -- ^ Value to check
-    -> Bool
+class Monoid (AxisRangeEst a) => Axis a where
+  type AxisValue    a
+  type AxisRange    a
+  data AxisRangeEst a
+  -- | True if value is within axis range
+  axisValueInRange :: Proxy a -> AxisRange a -> AxisValue a -> Bool
+  -- | 
+  axisEsimator :: AxisValue a -> AxisRangeEst a
+
+
+estimateRange
+  :: forall x y. (Axis x, Axis y)
+  => FoldOverAxes x y
+  -> AxisRange x
+  -> AxisRange y
+  -> (AxisRangeEst x, AxisRangeEst y)
+estimateRange points rngX rngY = (rX,rY)
+  where
+    Pair rX rY
+      = ( foldOverAxes
+        $ filterAxisX (axisValueInRange (Proxy @x) rngX)
+        $ filterAxisY (axisValueInRange (Proxy @y) rngY)
+        $ points
+        )
+        (\(Pair mX mY) x y -> Pair (mX <> axisEsimator x) (mY <> axisEsimator y))
+        (\(Pair mX mY) x   -> Pair (mX <> axisEsimator x)  mY)
+        (\(Pair mX mY)   y -> Pair  mX                    (mY <> axisEsimator y))
+        mempty
 
 
 ----------------------------------------------------------------
@@ -27,26 +84,43 @@ class Axis a where
 data Numeric
 
 instance Axis Numeric where
-  type AxisValue Numeric = Double
+  type AxisValue    Numeric = Double
+  type AxisRange    Numeric = (Maybe Double, Maybe Double)
+  data AxisRangeEst Numeric
+    = UnknownLim
+    | MinMaxLimits !Double !Double
+    deriving (Show)
+  --
   axisValueInRange _ (Nothing, Nothing) _ = True
   axisValueInRange _ (Just a,  Nothing) x = x >= a
   axisValueInRange _ (Nothing, Just b ) x = x <= b
   axisValueInRange _ (Just a,  Just b ) x = x >= a && x <= b
+  --
+  axisEsimator x = MinMaxLimits x x
 
-
-
-data NumLimits
-  = UnknownLim
-  | MinMaxLimits !Double !Double
-  deriving (Show)
-
-numLim :: Double -> NumLimits
-numLim x = MinMaxLimits x x
-
-instance Semigroup NumLimits where
+instance Semigroup (AxisRangeEst Numeric) where
   UnknownLim <> x = x
   x <> UnknownLim = x
   MinMaxLimits a1 b1 <> MinMaxLimits a2 b2 = MinMaxLimits (min a1 a2) (max b1 b2)
 
-instance Monoid NumLimits where
+instance Monoid (AxisRangeEst Numeric) where
   mempty = UnknownLim
+
+
+
+----------------------------------------------------------------
+--
+----------------------------------------------------------------
+
+data Pair a b = Pair !a !b
+              deriving (Show,Eq,Ord)
+
+instance (Semigroup a, Semigroup b) => Semigroup (Pair a b) where
+  Pair x y <> Pair x' y' = Pair (x <> x') (y <> y')
+  {-# INLINABLE (<>) #-}
+
+instance (Monoid a, Monoid b) => Monoid (Pair a b) where
+  mempty = Pair mempty mempty
+  Pair x y `mappend` Pair x' y' = Pair (x `mappend` x') (y `mappend` y')
+  {-# INLINABLE mempty  #-}
+  {-# INLINABLE mappend #-}
