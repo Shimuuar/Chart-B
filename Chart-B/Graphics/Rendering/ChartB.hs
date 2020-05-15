@@ -22,6 +22,7 @@ import Data.Foldable
 import Data.Maybe
 import Data.Proxy
 import Data.Ord
+import Control.Arrow   ((***))
 import Control.Category
 import Control.Monad
 import Control.Lens
@@ -138,24 +139,27 @@ applyFoldMap toM fld = fld (\m a -> m <> toM a) mempty
 
 
 
-scatterplot :: [(Double,Double)] -> PlotObj Numeric Numeric
-scatterplot xy = PlotObj
-  { plotFunction  = scatterplotRender xy
-  , plotPointData = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
+scatterplotOf :: (Real a, Real b) => Fold s (a,b) -> s -> PlotObj Numeric Numeric
+{-# INLINE scatterplotOf #-}
+scatterplotOf optic xy = PlotObj
+  { plotFunction  = scatterplotRender (optic . to (realToFrac *** realToFrac)) xy
+  , plotPointData = FoldOverAxes $ \stepXY _ _ a0 ->
+      foldlOf' optic (\a (x,y) -> stepXY a (realToFrac x) (realToFrac y)) a0 xy
   , plotParam     = mempty
                   & prop (#line . #shape) .~ Nothing
   }
 
-lineplot :: [(Double,Double)] -> PlotObj Numeric Numeric
-lineplot xy = PlotObj
-  { plotFunction  = scatterplotRender xy
-  , plotPointData = FoldOverAxes $ \stepXY _ _ a0 -> foldl' (\a (x,y) -> stepXY a x y) a0 xy
+lineplot :: (Real a, Real b) => Fold s (a,b) -> s -> PlotObj Numeric Numeric
+lineplot optic xy = PlotObj
+  { plotFunction  = scatterplotRender (optic . to (realToFrac *** realToFrac)) xy
+  , plotPointData = FoldOverAxes $ \stepXY _ _ a0 ->
+      foldlOf' optic (\a (x,y) -> stepXY a (realToFrac x) (realToFrac y)) a0 xy
   , plotParam     = mempty
                   & prop (#marker . #shape) .~ Nothing
   }
 
-scatterplotRender :: [(Double, Double)] -> Endo PlotParam -> Drawing ()
-scatterplotRender xy pEndo = do
+scatterplotRender :: Fold s (Double,Double) -> s -> Endo PlotParam -> Drawing ()
+scatterplotRender optic xy pEndo = do
   advanceColorWheel
   p <- appEndo pEndo <$> getDefaultPlotParam
   -- Draw lines
@@ -169,8 +173,9 @@ scatterplotRender xy pEndo = do
           , _line_cap    = p ^. plotLines . lineCap
           , _line_join   = p ^. plotLines . lineJoin
           }
+  -- FIXME: do not materialize list
   forM_ mLstyle $ \style -> do
-    liftedDrawLines style $ uncurry Point <$> xy
+    liftedDrawLines style $ xy ^.. optic . to (uncurry Point)
   -- Draw markers
   let mPstyle = do
         s <- p ^. plotMarker . markerStyle
@@ -184,7 +189,7 @@ scatterplotRender xy pEndo = do
           , _point_shape        = s
           }
   forM_ mPstyle $ \style ->
-    forM_ xy $ \(x,y) ->
+    forMOf_ optic xy $ \(x,y) ->
       liftedDrawPoint style $ Point x y
 
 
@@ -199,26 +204,26 @@ x2 = [(x,x*x)   | x <- [0.3, 0.31 .. 1 ]]
 x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
 
 
-go = plot
-  [ scatterplot x2
-    & prop (#marker . #size)        .~ 4
-    & prop (#marker . #shape)       .~ Just PointShapeStar
-    & prop (#marker . #borderwidth) .~ 1
-    -- & prop #marker . markerBorderColor .~ Just (opaque green)
-  , lineplot x3
-  ]
-  & prop #xlim .~ (Nothing, Just 1)
+-- go = plot
+--   [ scatterplot x2
+--     & prop (#marker . #size)        .~ 4
+--     & prop (#marker . #shape)       .~ Just PointShapeStar
+--     & prop (#marker . #borderwidth) .~ 1
+--     -- & prop #marker . markerBorderColor .~ Just (opaque green)
+--   , lineplot x3
+--   ]
+--   & prop #xlim .~ (Nothing, Just 1)
 
 go2 = plot
-  [ scatterplot x2
-  , scatterplot x3
+  [ scatterplotOf each x2
+  , scatterplotOf each x3
   ]
 
-go3 = plot
-  [ (scatterplot x2 <> lineplot x3)
-  & prop #color .~ opaque green
-  ]
-  & prop #xlim .~ (Nothing, Just 1)
+-- go3 = plot
+--   [ (scatterplot x2 <> lineplot x3)
+--   & prop #color .~ opaque green
+--   ]
+--   & prop #xlim .~ (Nothing, Just 1)
 
 
 
