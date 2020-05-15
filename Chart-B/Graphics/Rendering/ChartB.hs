@@ -134,11 +134,6 @@ makePlot Plot{ plotObjects = (mconcat -> plt), ..} = save $ fillBackground def $
 
 
 
-applyFoldMap :: Monoid m => (a -> m) -> ((m -> a -> m) -> m -> m) -> m
-applyFoldMap toM fld = fld (\m a -> m <> toM a) mempty
-
-
-
 scatterplotOf :: (Real a, Real b) => Fold s (a,b) -> s -> PlotObj Numeric Numeric
 {-# INLINE scatterplotOf #-}
 scatterplotOf optic xy = PlotObj
