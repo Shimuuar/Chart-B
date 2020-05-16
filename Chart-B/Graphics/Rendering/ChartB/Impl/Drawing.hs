@@ -9,6 +9,7 @@ import Control.Monad.Reader
 import Data.Default.Class
 import Data.Colour
 import Data.Colour.Names
+import Data.Monoid
 import Graphics.Rendering.Chart.Drawing
 import Graphics.Rendering.Chart.Geometry
 
@@ -35,6 +36,11 @@ runDrawing tr (Drawing act)
     -- we have to add dummy value in from
     defColors = opaque blue
               : cycle (map opaque $ [blue, red, green, orange, cyan, magenta])
+
+newPlot :: Endo PlotParam -> Drawing PlotParam
+newPlot pEndo = do
+  advanceColorWheel
+  appEndo pEndo <$> getDefaultPlotParam
 
 advanceColorWheel :: Drawing ()
 advanceColorWheel = Drawing $ modify tail

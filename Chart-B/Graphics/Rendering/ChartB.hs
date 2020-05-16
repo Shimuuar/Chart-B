@@ -143,9 +143,7 @@ lineplotOf optic xy = PlotObj
   }
 
 scatterplotRender :: Fold s (Double,Double) -> s -> Endo PlotParam -> Drawing ()
-scatterplotRender optic xy pEndo = do
-  advanceColorWheel
-  p <- appEndo pEndo <$> getDefaultPlotParam
+scatterplotRender optic xy = newPlot >=> \p -> do
   -- Draw lines
   --
   -- FIXME: do not materialize list
@@ -162,9 +160,7 @@ data Bar = Bar Double Double Double
 
 barplotOf :: Fold s Bar -> s -> PlotObj Numeric Numeric
 barplotOf optic bars = PlotObj
-  { plotFunction  = \pEndo -> do
-      advanceColorWheel
-      p <- appEndo pEndo <$> getDefaultPlotParam
+  { plotFunction = newPlot >=> \p -> do
       usingLineStype p $ \style ->
         forMOf_ optic bars $ \(Bar x1 x2 y) ->
           liftedDrawLines style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
