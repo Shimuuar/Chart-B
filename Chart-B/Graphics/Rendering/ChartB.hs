@@ -147,32 +147,12 @@ scatterplotRender optic xy pEndo = do
   advanceColorWheel
   p <- appEndo pEndo <$> getDefaultPlotParam
   -- Draw lines
-  let mLstyle = do
-        s <- p ^. plotLines . lineDashes
-        Just LineStyle
-          { _line_color  = fromMaybe (p ^. plotMainColor)
-                         $ p ^. plotLines . lineColor
-          , _line_width  = p ^. plotLines . lineWidth
-          , _line_dashes = s
-          , _line_cap    = p ^. plotLines . lineCap
-          , _line_join   = p ^. plotLines . lineJoin
-          }
+  --
   -- FIXME: do not materialize list
-  forM_ mLstyle $ \style -> do
+  usingLineStype p $ \style ->
     liftedDrawLines style $ xy ^.. optic . to (uncurry Point)
   -- Draw markers
-  let mPstyle = do
-        s <- p ^. plotMarker . markerStyle
-        Just PointStyle
-          { _point_color        = fromMaybe (p ^. plotMainColor)
-                                $ p ^. plotMarker . markerColor
-          , _point_border_color = fromMaybe (p ^. plotMainColor)
-                                $ p ^. plotMarker . markerBorderColor
-          , _point_border_width = p ^. plotMarker . markerBorderWidth
-          , _point_radius       = p ^. plotMarker . markerRadius
-          , _point_shape        = s
-          }
-  forM_ mPstyle $ \style ->
+  usingPointStype p $ \style ->
     forMOf_ optic xy $ \(x,y) -> do
       liftedDrawPoint style $ Point x y
 
@@ -185,25 +165,41 @@ barplotOf optic bars = PlotObj
   { plotFunction  = \pEndo -> do
       advanceColorWheel
       p <- appEndo pEndo <$> getDefaultPlotParam
-      let mLstyle = do
-            s <- p ^. plotLines . lineDashes
-            Just LineStyle
-              { _line_color  = fromMaybe (p ^. plotMainColor)
-                            $ p ^. plotLines . lineColor
-             , _line_width  = p ^. plotLines . lineWidth
-             , _line_dashes = s
-             , _line_cap    = p ^. plotLines . lineCap
-             , _line_join   = p ^. plotLines . lineJoin
-             }
-      forM_ mLstyle $ \style ->
+      usingLineStype p $ \style ->
         forMOf_ optic bars $ \(Bar x1 x2 y) ->
           liftedDrawLines style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
+  --
   , plotPointData = FoldOverAxes $ \_ stepX stepY a0 ->
         flip stepY 0
       $ foldlOf' optic (\a (Bar x1 x2 y) -> flip stepY y $ flip stepX x2 $ flip stepX x1 a) a0 bars
+  --
   , plotParam     = mempty
   }
 
+usingPointStype :: Monad m => PlotParam -> (PointStyle -> m ()) -> m ()
+usingPointStype p action = mapM_ action $ do
+  s <- p ^. plotMarker . markerStyle
+  Just PointStyle
+    { _point_color        = fromMaybe (p ^. plotMainColor)
+                          $ p ^. plotMarker . markerColor
+    , _point_border_color = fromMaybe (p ^. plotMainColor)
+                          $ p ^. plotMarker . markerBorderColor
+    , _point_border_width = p ^. plotMarker . markerBorderWidth
+    , _point_radius       = p ^. plotMarker . markerRadius
+    , _point_shape        = s
+    }
+
+usingLineStype :: Monad m => PlotParam -> (LineStyle -> m ()) -> m ()
+usingLineStype p action = mapM_ action $ do
+  s <- p ^. plotLines . lineDashes
+  Just LineStyle
+    { _line_color  = fromMaybe (p ^. plotMainColor)
+                   $ p ^. plotLines . lineColor
+    , _line_width  = p ^. plotLines . lineWidth
+    , _line_dashes = s
+    , _line_cap    = p ^. plotLines . lineCap
+    , _line_join   = p ^. plotLines . lineJoin
+    }
 
 ----------------------------------------------------------------
 --
