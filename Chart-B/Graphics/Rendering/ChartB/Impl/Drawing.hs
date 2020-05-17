@@ -58,4 +58,9 @@ liftedDrawPoint st p = do
 liftedDrawLines :: LineStyle -> [Point] -> Drawing ()
 liftedDrawLines style pts = Drawing $ do
   tr <- ask
-  lift $ lift $ withLineStyle style $ return (transformL tr <$> pts) >>= strokePointPath
+  lift $ lift $ withLineStyle style $ strokePointPath $ transformL tr <$> pts
+
+liftedFillPath :: FillStyle -> [Point] -> Drawing ()
+liftedFillPath style pts = Drawing $ do
+  tr <- ask
+  lift $ lift $ withFillStyle style $ fillPointPath $ transformL tr <$> pts

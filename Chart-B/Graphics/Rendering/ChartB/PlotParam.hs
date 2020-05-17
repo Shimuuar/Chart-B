@@ -19,9 +19,10 @@ import Data.Colour
 
 
 data PlotParam = PlotParam
-  { _plotMainColor :: AlphaColour Double -- ^ Primary color of everything
-  , _plotMarker    :: MarkerParam
-  , _plotLines     :: LineParam
+  { _plotMainColor :: !(AlphaColour Double) -- ^ Primary color of everything
+  , _plotMarker    :: !MarkerParam
+  , _plotLines     :: !LineParam
+  , _plotFill      :: !FillParam
   }
 
 data MarkerParam = MarkerParam
@@ -40,12 +41,17 @@ data LineParam = LineParam
   , _lineJoin   :: LineJoin
   }
 
+data FillParam = FillParam
+  { _fillColor  :: !(Maybe (AlphaColour Double))
+  , _fillEnable :: !Bool
+  }
 
 instance Default PlotParam where
   def = PlotParam
     { _plotMainColor = opaque black
     , _plotMarker    = def
     , _plotLines     = def
+    , _plotFill      = def
     }
 
 instance Default MarkerParam where
@@ -66,6 +72,11 @@ instance Default LineParam where
     , _lineJoin   = LineJoinBevel
     }
 
+instance Default FillParam where
+  def = FillParam
+    { _fillColor  = Nothing
+    , _fillEnable = True
+    }
 
 endoL :: Setter' (Endo a) a
 endoL fun (Endo f) = fmap Endo $ distribute $ fun . f
@@ -73,3 +84,4 @@ endoL fun (Endo f) = fmap Endo $ distribute $ fun . f
 $(makeLenses ''PlotParam)
 $(makeLenses ''MarkerParam)
 $(makeLenses ''LineParam)
+$(makeLenses ''FillParam)

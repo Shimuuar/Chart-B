@@ -30,6 +30,7 @@ import qualified Graphics.Rendering.Chart.Backend.Cairo as Cairo
 import Graphics.Rendering.Chart.Renderable
 import Graphics.Rendering.Chart.Drawing
 import Graphics.Rendering.Chart.Geometry
+import Graphics.Rendering.Chart.Backend.Types
 import Prelude hiding (id,(.))
 import Data.Colour
 import Data.Colour.Names
@@ -155,12 +156,15 @@ scatterplotRender optic xy = newPlot >=> \p -> do
       liftedDrawPoint style $ Point x y
 
 
-
+-- | Description of single column in barplot
 data Bar = Bar Double Double Double
 
 barplotOf :: Fold s Bar -> s -> PlotObj Numeric Numeric
 barplotOf optic bars = PlotObj
   { plotFunction = newPlot >=> \p -> do
+      usingFillStype p $ \style ->
+        forMOf_ optic bars $ \(Bar x1 x2 y) ->
+          liftedFillPath style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
       usingLineStype p $ \style ->
         forMOf_ optic bars $ \(Bar x1 x2 y) ->
           liftedDrawLines style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
@@ -196,6 +200,15 @@ usingLineStype p action = mapM_ action $ do
     , _line_cap    = p ^. plotLines . lineCap
     , _line_join   = p ^. plotLines . lineJoin
     }
+
+usingFillStype :: Monad m => PlotParam -> (FillStyle -> m ()) -> m ()
+usingFillStype p action = do
+  when (p ^. plotFill . fillEnable) $ do
+    action FillStyleSolid
+      { _fill_color = fromMaybe (blend 0.5 (opaque white) (p ^. plotMainColor))
+                    $ (p ^. plotFill . fillColor)
+      }
+
 
 ----------------------------------------------------------------
 --
@@ -279,7 +292,8 @@ instance (p ~ MarkerParam) => IsLabel "marker" (Property p PlotParam) where
 instance (p ~ LineParam)   => IsLabel "line"   (Property p PlotParam) where
   fromLabel = Property plotLines
 
-
+instance (p ~ FillParam)   => IsLabel "fill"   (Property p PlotParam) where
+  fromLabel = Property plotFill
 
 ----------------------------------------
 -- Marker
@@ -311,8 +325,24 @@ instance a ~ PointShape => IsLabel "style" (Property (Maybe a) MarkerParam) wher
 instance (p ~ [Double]) => IsLabel "shape" (Property (Maybe p) LineParam) where
   fromLabel = Property lineDashes
 
+----------------------------------------
+-- Fill
+
+instance (p ~ AlphaColour Double) => IsLabel "color" (Property (Maybe p) FillParam) where
+  fromLabel = Property fillColor
+
+instance p ~ Double => IsLabel "color" (Property (AlphaColour p) FillParam) where
+  fromLabel = #color . nonProp (opaque black)
+
+instance (p ~ Bool) => IsLabel "enable" (Property p FillParam) where
+  fromLabel = Property fillEnable
+
+----------------------------------------
+-- Helpers
+
 nonProp :: a -> Property a (Maybe a)
 nonProp x0 = Property $ \f -> fmap Just . f . fromMaybe x0
+
 
 
 ----------------------------------------------------------------
