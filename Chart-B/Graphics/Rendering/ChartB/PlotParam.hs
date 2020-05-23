@@ -46,6 +46,12 @@ data FillParam = FillParam
   , _fillEnable :: !Bool
   }
 
+data BarplotParams = BarplotParams
+  { _barplotZero    :: !Double
+  , _barplotOutline :: !Bool
+  }
+
+
 instance Default PlotParam where
   def = PlotParam
     { _plotMainColor = opaque black
@@ -78,6 +84,12 @@ instance Default FillParam where
     , _fillEnable = True
     }
 
+instance Default BarplotParams where
+  def = BarplotParams
+    { _barplotZero    = 0
+    , _barplotOutline = False
+    }
+
 endoL :: Setter' (Endo a) a
 endoL fun (Endo f) = fmap Endo $ distribute $ fun . f
 
@@ -85,3 +97,4 @@ $(makeLenses ''PlotParam)
 $(makeLenses ''MarkerParam)
 $(makeLenses ''LineParam)
 $(makeLenses ''FillParam)
+$(makeLenses ''BarplotParams)

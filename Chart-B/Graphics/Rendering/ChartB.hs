@@ -163,25 +163,48 @@ scatterplotRender optic xy = newPlot >=> \p -> do
 
 
 
-barplotOf :: (Real x, Real y) => Fold s (x,y) -> s -> PlotObj Numeric Numeric
-barplotOf optic xy = PlotObj
-  { plotFunction = newPlot >=> \p -> do
-      usingFillStype p $ \style ->
-        forM_ asBars $ \(Bar x1 x2 y) ->
-          liftedFillPath style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
-      usingLineStype p $ \style ->
-        forM_ asBars $ \(Bar x1 x2 y) ->
-          liftedDrawLines style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
+barplotOf
+  :: (Real x, Real y)
+  => [BarplotParams -> BarplotParams]
+  -> Fold s (x,y)
+  -> s
+  -> PlotObj Numeric Numeric
+barplotOf params optic xy = PlotObj
+  { plotFunction = newPlot >=> plotFunctionImpl
   --
-  , plotPointData = FoldOverAxes $ \_ stepX stepY a0 ->
-        flip stepY 0
-      $ foldl' (\a (Bar x1 x2 y) -> flip stepY y $ flip stepX x2 $ flip stepX x1 a) a0 asBars
+  , plotPointData = FoldOverAxes $ \stepXY stepX stepY a0 ->
+      case param ^. barplotOutline of
+        True  -> foldl' (\a (Point x y) -> stepXY a x y) a0 asOutline
+        False -> flip stepY zero
+               $ foldl' (\a (Bar x1 x2 y) -> flip stepY y $ flip stepX x2 $ flip stepX x1 a) a0 asBars
   --
   , plotParam     = mempty
   }
   where
-    bars   = xy ^.. optic . to (realToFrac *** realToFrac)
-    asBars = toBars bars
+    plotFunctionImpl
+      | param^.barplotOutline = outlineBarplot
+      | otherwise             = normalBarplot
+    --
+    normalBarplot p = do
+      usingFillStype p $ \style ->
+        forM_ asBars $ \(Bar x1 x2 y) ->
+          liftedFillPath style $ [ Point x1 zero, Point x1 y, Point x2 y, Point x2 zero ]
+      usingLineStype p $ \style ->
+        forM_ asBars $ \(Bar x1 x2 y) ->
+          liftedDrawLines style $ [ Point x1 zero, Point x1 y, Point x2 y, Point x2 zero ]
+    --
+    outlineBarplot p = do
+      usingFillStype p $ \style ->
+        liftedFillPath style asOutline
+      usingLineStype p $ \style ->
+        liftedDrawLines style asOutline
+    --
+    asBars    = toBars         $ xy ^.. optic . to (realToFrac *** realToFrac)
+    asOutline = toOutline zero $ xy ^.. optic . to (realToFrac *** realToFrac)
+    --
+    param  = appEndo (foldMap Endo params) def
+    zero   = param ^. barplotZero
+
 
 toBars :: Fractional x => [(x, y)] -> [Bar x y]
 toBars = transformAdjacent
@@ -189,6 +212,31 @@ toBars = transformAdjacent
       ( \(x,y)  (xB,_)        -> let dx = (xB - x)/2 in Bar (x-dx) (x+dx) y
       , \(xA,_) (x,y)  (xB,_) -> Bar ((x+xA)/2) ((x+xB)/2) y
       , \       (xA,_) (x,y)  -> let dx = (x - xA)/2 in Bar (x-dx) (x+dx) y
+      )
+
+toOutline :: Double -> [(Double, Double)] -> [Point]
+toOutline zero = concat . transformAdjacent
+      ( \(x,y) -> [ Point (x-0.5) zero
+                  , Point (x-0.5) y
+                  , Point (x+0.5) y
+                  , Point (x+0.5) zero
+                  ])
+      ( \(x,y)  (xB,_)        -> let dX = (xB - x)/2 in
+                                   [ Point (x-dX) zero
+                                   , Point (x-dX) y
+                                   , Point (x+dX) y
+                                   ]
+      , \(xA,yA) (x,y)  (xB,_) ->
+          [ Point ((xA+x)/2) yA
+          , Point ((xA+x)/2) y
+          , Point ((x+xB)/2) y
+          ]
+      , \(xA,yA) (x,y)  -> let dX = (x - xA)/2 in
+                             [ Point (x-dX) yA
+                             , Point (x-dX) y
+                             , Point (x+dX) y
+                             , Point (x+dX) zero
+                             ]
       )
 
     -- asBars [(x1,y1)
@@ -274,12 +322,17 @@ xs_ = [0.3, 0.31 .. 1.1 ]
 
 
 go2 = plot
-  [ barplotOf each
-    [ (x, 0.75 * x**2)
-    | x <- exp <$>[log 0.1, log 0.1 + 0.63 .. 0]
+  [ barplotOf [ prop #zero .~ 0.22
+              , prop #outline .~ True
+              ] each
+    [ (x, 26.75 * x**2 * (1-x) ** 3)
+    | x <- exp <$>[log 0.1, log 0.1 + 0.123 .. 0]
+    , x < 1
     ]
-  , scatterplotOf each xs2
+  , lineplotOf each xs2
   , scatterplotOf each xs3
+  & prop (#marker . #size) .~ 4
+--  & prop (#marker . #shape) .~ PointShapeStar
   , scatterplotOf (each . to (\x -> (x,x**2.2))) xs_
   ]
 
@@ -379,6 +432,16 @@ instance p ~ Double => IsLabel "color" (Property (AlphaColour p) FillParam) wher
 
 instance (p ~ Bool) => IsLabel "enable" (Property p FillParam) where
   fromLabel = Property fillEnable
+
+
+----------------------------------------
+-- Barplot
+
+instance (p ~ Double) => IsLabel "zero" (Property p BarplotParams) where
+  fromLabel = Property barplotZero
+
+instance (p ~ Bool) => IsLabel "outline" (Property p BarplotParams) where
+  fromLabel = Property barplotOutline
 
 ----------------------------------------
 -- Helpers
