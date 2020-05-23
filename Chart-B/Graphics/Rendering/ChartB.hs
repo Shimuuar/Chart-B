@@ -20,7 +20,6 @@ import Data.Monoid
 import Data.Coerce
 import Data.Foldable
 import Data.Maybe
-import Data.Proxy
 import Data.Ord
 import Control.Arrow   ((***))
 import Control.Category
@@ -30,13 +29,11 @@ import qualified Graphics.Rendering.Chart.Backend.Cairo as Cairo
 import Graphics.Rendering.Chart.Renderable
 import Graphics.Rendering.Chart.Drawing
 import Graphics.Rendering.Chart.Geometry
-import Graphics.Rendering.Chart.Backend.Types
 import Prelude hiding (id,(.))
 import Data.Colour
 import Data.Colour.Names
 import GHC.OverloadedLabels (IsLabel(..))
 
-import qualified Graphics.Rendering.Chart.Axis.Floating as Axis
 
 import Graphics.Rendering.ChartB.PlotParam
 import Graphics.Rendering.ChartB.Class
@@ -162,25 +159,63 @@ scatterplotRender optic xy = newPlot >=> \p -> do
       liftedDrawPoint style $ Point x y
 
 
--- | Description of single column in barplot
-data Bar = Bar Double Double Double
 
-barplotOf :: Fold s Bar -> s -> PlotObj Numeric Numeric
-barplotOf optic bars = PlotObj
+
+
+
+barplotOf :: (Real x, Real y) => Fold s (x,y) -> s -> PlotObj Numeric Numeric
+barplotOf optic xy = PlotObj
   { plotFunction = newPlot >=> \p -> do
       usingFillStype p $ \style ->
-        forMOf_ optic bars $ \(Bar x1 x2 y) ->
+        forM_ asBars $ \(Bar x1 x2 y) ->
           liftedFillPath style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
       usingLineStype p $ \style ->
-        forMOf_ optic bars $ \(Bar x1 x2 y) ->
+        forM_ asBars $ \(Bar x1 x2 y) ->
           liftedDrawLines style $ [ Point x1 0, Point x1 y, Point x2 y, Point x2 0 ]
   --
   , plotPointData = FoldOverAxes $ \_ stepX stepY a0 ->
         flip stepY 0
-      $ foldlOf' optic (\a (Bar x1 x2 y) -> flip stepY y $ flip stepX x2 $ flip stepX x1 a) a0 bars
+      $ foldl' (\a (Bar x1 x2 y) -> flip stepY y $ flip stepX x2 $ flip stepX x1 a) a0 asBars
   --
   , plotParam     = mempty
   }
+  where
+    bars   = xy ^.. optic . to (realToFrac *** realToFrac)
+    asBars = toBars bars
+
+toBars :: Fractional x => [(x, y)] -> [Bar x y]
+toBars = transformAdjacent
+      ( \(x,y) -> (Bar (x-0.5) (x+0.5) y))
+      ( \(x,y)  (xB,_)        -> let dx = (xB - x)/2 in Bar (x-dx) (x+dx) y
+      , \(xA,_) (x,y)  (xB,_) -> Bar ((x+xA)/2) ((x+xB)/2) y
+      , \       (xA,_) (x,y)  -> let dx = (x - xA)/2 in Bar (x-dx) (x+dx) y
+      )
+
+    -- asBars [(x1,y1)
+
+
+transformAdjacent
+  :: (a -> b)
+  -> ((a -> a -> b), (a -> a -> a -> b), (a -> a -> b))
+  -> [a]
+  -> [b]
+transformAdjacent _ _ []  = []
+transformAdjacent f _ [a] = [f a]
+transformAdjacent _ (fa,_,fb) [a1,a2] = [fa a1 a2, fb a1 a2]
+transformAdjacent _ (fa,f,fb) xs@(a1:a2:_) = fa a1 a2 : go xs
+  where
+    go (a:as@(b:c:_)) = f a b c : go as
+    go [a,b]          = [fb a b]
+    go _              = error "transformAdjacent: impossible"
+
+data Bar x y = Bar !x !x !y
+  deriving Show
+
+data Ch x y
+  = Last x y x
+  | Step x y (Ch x y)
+
+
 
 usingPointStype :: Monad m => PlotParam -> (PointStyle -> m ()) -> m ()
 usingPointStype p action = mapM_ action $ do
@@ -220,11 +255,12 @@ usingFillStype p action = do
 --
 ----------------------------------------------------------------
 
-x2,x3 :: [(Double,Double)]
-x2 = [(x,x*x)   | x <- [0.3, 0.31 .. 1 ]]
-x3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
-xs :: [Double]
-xs = [0.3, 0.31 .. 1.1 ]
+xs2,xs3 :: [(Double,Double)]
+xs2 = [(x,x*x)   | x <- [0.3, 0.31 .. 1 ]]
+xs3 = [(x,x*x*x) | x <- [0.3, 0.31 .. 1 ]]
+xs_ :: [Double]
+xs_ = [0.3, 0.31 .. 1.1 ]
+
 
 -- go = plot
 --   [ scatterplot x2
@@ -236,14 +272,15 @@ xs = [0.3, 0.31 .. 1.1 ]
 --   ]
 --   & prop #xlim .~ (Nothing, Just 1)
 
+
 go2 = plot
-  [ scatterplotOf each x2
-  , scatterplotOf each x3
-  , scatterplotOf (each . to (\x -> (x,x**2.2))) xs
-  , barplotOf each
-    [ Bar 0.0 0.2 0.3
-    , Bar 0.4 0.5 (-0.2)
+  [ barplotOf each
+    [ (x, 0.75 * x**2)
+    | x <- exp <$>[log 0.1, log 0.1 + 0.63 .. 0]
     ]
+  , scatterplotOf each xs2
+  , scatterplotOf each xs3
+  , scatterplotOf (each . to (\x -> (x,x**2.2))) xs_
   ]
 
 -- go3 = plot
