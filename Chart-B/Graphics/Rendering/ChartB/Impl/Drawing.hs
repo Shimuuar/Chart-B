@@ -64,3 +64,6 @@ liftedFillPath :: FillStyle -> [Point] -> Drawing ()
 liftedFillPath style pts = Drawing $ do
   tr <- ask
   lift $ lift $ withFillStyle style $ fillPointPath $ transformL tr <$> pts
+
+strokeAlignedPointPath :: [Point] -> BackendProgram ()
+strokeAlignedPointPath = strokePointPath <=< alignStrokePoints
