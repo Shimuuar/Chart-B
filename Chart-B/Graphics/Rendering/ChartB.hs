@@ -56,56 +56,62 @@ makePlot :: Plot Numeric Numeric -> IO ()
 makePlot Plot{ plotObjects = (mconcat -> plt), ..} = save $ fillBackground def $ Renderable
   { minsize = return (0,0)
   , render  = \(w,h) -> do
-      -- Viewport for plot itself
-      let marginAxis = 0.03
-          viewportTransform = Matrix
-            { xx = (1 - 2*marginAxis)*w, yx = 0
-            , xy = 0                   , yy = -(1 - 2*marginAxis)*h
-            , x0 = w*marginAxis
-            , y0 = h*(1-marginAxis)
-            }
-      -- Compute axes range
+      -- First we need to compute transform for viewport of the plot
+      -- (area where we do all the plotting). This requires to compute
+      -- labels for plot and allocate size for them
+
+      -- First we need to compute ranges for the plot and transform
+      -- from plot coordinates to viewport coordinates
       let (rngX,rngY) = estimateRange (plotPointData plt) axisLimitX axisLimitY
-          -- Merge range estimates
-          (xA,xB) = fromRange rngX axisLimitX
-          (yA,yB) = fromRange rngY axisLimitY
-          dX      = xB - xA
-          dY      = yB - yA
+          (xA,xB)     = fromRange rngX axisLimitX
+          (yA,yB)     = fromRange rngY axisLimitY
+          dX          = xB - xA
+          dY          = yB - yA
           plotTransform = Matrix
             { xx = 1/dX, yx = 0
             , xy = 0   , yy = 1/dY
             , x0 = -xA / dX
             , y0 = -yA / dY
             }
+      -- Now we need to compute labels for axes, margins for labels
+      let ticksX = map realToFrac $ steps 5 (xA,xB)
+          ticksY = map realToFrac $ steps 5 (yA,yB)
+      labelMarginX <-  maximum . map fst
+                   <$> mapM (textDimension . show) ticksY
+      labelMarginY <-  maximum . map snd
+                   <$> mapM (textDimension . show) ticksX
+      -- Compute
+      let marginAxis = 5
+          viewportTransform = Matrix
+            { xx =  (w - marginAxis*3 - labelMarginX)
+            , yy = -(h - marginAxis*3 - labelMarginY)
+            , yx = 0
+            , xy = 0
+            , x0 = marginAxis * 2 + labelMarginX
+            , y0 = h - (marginAxis * 2 + labelMarginY)
+            }
+      -- Compute axes range
       let tr = plotTransform * viewportTransform
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
         $ runDrawing tr $ plotFunction plt (plotParam plt)
       -- Plot axes on top of everything else
-      alignStrokePoints [ transformL viewportTransform p
-                        | p <- [Point 0 0, Point 0 1]
-                        ] >>= strokePointPath
-      alignStrokePoints [ transformL viewportTransform p
-                        | p <- [Point 0 0, Point 1 0]
-                        ] >>= strokePointPath
-      -- Plot ticks
-      let ticksX = map realToFrac $ steps 5 (xA,xB)
-          ticksY = map realToFrac $ steps 5 (yA,yB)
+      strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 0 1]
+      strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 1 0]
       withLineStyle def $ do
-        forM_ ticksX $ \x ->
-          alignStrokePoints [ transformL tr p
-                            | p <- [Point x yA, Point x (yA + 0.015*dY)]
-                            ]
-            >>= strokePointPath
-        forM_ ticksY $ \y ->
-          alignStrokePoints (let Point px py = transformL tr $ Point xA y
-                             in [ Point px py, Point (px+5) py ]
-                            )
-            >>= strokePointPath
+        forM_ ticksX $ \x -> do
+          let Point px py = transformL tr $ Point x yA
+          strokeAlignedPointPath [Point px py, Point px (py-5)]
+        forM_ ticksY $ \y -> do
+          let Point px py = transformL tr $ Point xA y
+          strokeAlignedPointPath [ Point px py, Point (px+5) py ]
+      -- Plot labels
       withFontStyle def $ do
-        forM_ ticksX $ \x ->
-          drawTextA HTA_Centre VTA_Top (transformL tr (Point x yA)) (show x)
-        forM_ ticksY $ \y ->
-          drawTextA HTA_Right VTA_Centre (transformL tr (Point xA y)) (show y)
+        forM_ ticksX $ \x -> do
+          let Point x' y' = transformL tr $ Point x yA
+          drawTextA HTA_Centre VTA_Top (Point x' (y'+2)) (show x)
+        forM_ ticksY $ \y -> do
+          let Point x' y' = transformL tr $ Point xA y
+          drawTextA HTA_Right VTA_Centre (Point (x'-marginAxis) y') (show y)
       return (const Nothing)
   }
   where
