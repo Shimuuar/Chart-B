@@ -14,3 +14,4 @@ chart-tests/output/
 dist-newstyle/
 .ghc.environment.*
 cabal.project.local
+TAGS
