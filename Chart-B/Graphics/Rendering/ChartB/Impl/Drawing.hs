@@ -6,6 +6,7 @@ module Graphics.Rendering.ChartB.Impl.Drawing where
 import Control.Lens
 import Control.Monad.State.Strict
 import Control.Monad.Reader
+import Control.Monad.Operational
 import Data.Default.Class
 import Data.Colour
 import Data.Colour.Names
@@ -15,7 +16,8 @@ import Graphics.Rendering.Chart.Geometry
 
 import Graphics.Rendering.ChartB.Class
 import Graphics.Rendering.ChartB.PlotParam
-
+import Graphics.Rendering.Chart.Backend
+import Graphics.Rendering.Chart.Backend.Impl
 
 ----------------------------------------------------------------
 -- Drawing monad
@@ -23,7 +25,7 @@ import Graphics.Rendering.ChartB.PlotParam
 
 -- | Wrapper on top of BackendProgram for drawing. It keeps track of
 --   current viewport transformation and color wheel.
-newtype Drawing a = Drawing (StateT [AlphaColour Double] (ReaderT Matrix BackendProgram) a)
+newtype Drawing a = Drawing (StateT [AlphaColour Double] (ReaderT Matrix (Program ChartBackendInstr)) a)
   deriving newtype (Functor, Applicative, Monad)
 
 -- | Execute drawing program
