@@ -50,7 +50,10 @@ save = void . Cairo.renderableToFile
 
 
 makePlot :: Plot Numeric Numeric -> IO ()
-makePlot Plot{ plotObjects = (mconcat -> plt), ..} = save $ fillBackground def $ Renderable
+makePlot = save . fillBackground def . plotToRenderable
+
+plotToRenderable :: Plot Numeric Numeric -> Renderable ()
+plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
   { minsize = return (0,0)
   , render  = \(w,h) -> do
       -- First we need to compute transform for viewport of the plot
