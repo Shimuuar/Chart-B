@@ -18,6 +18,7 @@ module Graphics.Rendering.ChartB
     plotToRenderable
   , plot
   , Numeric
+  , prop
     -- ** Indivudal plot types
   , scatterplotOf
   , lineplotOf
