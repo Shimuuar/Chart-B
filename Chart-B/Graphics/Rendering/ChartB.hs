@@ -13,7 +13,19 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ViewPatterns               #-}
 -- |
-module Graphics.Rendering.ChartB where
+module Graphics.Rendering.ChartB
+  ( -- * Creating plots
+    plotToRenderable
+  , plot
+  , Numeric
+    -- ** Indivudal plot types
+  , scatterplotOf
+  , lineplotOf
+  , barplotOf
+    -- * Underlying data types
+  , Plot(..)
+  , PlotObj(..)
+  ) where
 
 import Data.Default.Class
 import Data.Monoid
@@ -25,7 +37,6 @@ import Control.Arrow   ((***))
 import Control.Category
 import Control.Monad
 import Control.Lens
-import qualified Graphics.Rendering.Chart.Backend.Cairo as Cairo
 import Graphics.Rendering.Chart.Renderable
 import Graphics.Rendering.Chart.Drawing
 import Graphics.Rendering.Chart.Geometry
@@ -40,17 +51,6 @@ import Graphics.Rendering.ChartB.Class
 import Graphics.Rendering.ChartB.Impl.Drawing
 import Graphics.Rendering.ChartB.Impl.Axis
 
-import Debug.Trace
-
-save :: Renderable r -> IO ()
-save = void . Cairo.renderableToFile
-  (Cairo.FileOptions (800,600) Cairo.PNG)
-  "q.png"
-
-
-
-makePlot :: Plot Numeric Numeric -> IO ()
-makePlot = save . fillBackground def . plotToRenderable
 
 plotToRenderable :: Plot Numeric Numeric -> Renderable ()
 plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
@@ -261,11 +261,6 @@ transformAdjacent _ (fa,f,fb) xs@(a1:a2:_) = fa a1 a2 : go xs
 
 data Bar x y = Bar !x !x !y
   deriving Show
-
-data Ch x y
-  = Last x y x
-  | Step x y (Ch x y)
-
 
 
 usingPointStype :: Monad m => PlotParam -> (PointStyle -> m ()) -> m ()
