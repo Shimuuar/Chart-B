@@ -119,7 +119,9 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
     fromRange UnknownLim (Nothing, Nothing) = (0   , 1  )
     fromRange UnknownLim (Just a,  Nothing) = (a   , a+1)
     fromRange UnknownLim (Nothing, Just b)  = (b-1 , b  )
-    fromRange (MinMaxLimits a b) (Nothing, Nothing) = (a - 0.05*d, b + 0.05*d)
+    fromRange (MinMaxLimits a b) (Nothing, Nothing)
+      | a == b    = (a - 0.5, a + 0.5)
+      | otherwise = (a - 0.05*d, b + 0.05*d)
       where d = b - a
     fromRange (MinMaxLimits _ b) (Just a, Nothing) = (a, b + 0.05*d)
       where b' = max a b
