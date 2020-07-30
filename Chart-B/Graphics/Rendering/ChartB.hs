@@ -98,8 +98,20 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
             , x0 = marginAxis * 2 + labelMarginX
             , y0 = h - (marginAxis * 2 + labelMarginY)
             }
-      -- Compute axes range
       let tr = plotTransform * viewportTransform
+      -- Draw grid
+      when plotGrid $ do
+        let gridStyle = def & line_color .~ opaque lightgray
+        withLineStyle gridStyle $ do
+          forM_ ticksX $ \x -> do
+            let p1 = transformL tr $ Point x yA
+                p2 = transformL tr $ Point x yB
+            strokeAlignedPointPath [p1, p2]
+          forM_ ticksY $ \y -> do
+            let p1 = transformL tr $ Point xA y
+                p2 = transformL tr $ Point xB y
+            strokeAlignedPointPath [p1, p2]
+      -- Draw plots
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
         $ runDrawing tr $ plotFunction plt (plotParam plt)
       -- Plot axes on top of everything else
@@ -351,6 +363,9 @@ instance IsLabel "title" (Property [Char] (Plot x y)) where
 instance IsLabel "title" (Property (Maybe [Char]) (Plot x y)) where
   fromLabel = Property (lens plotTitle (\p x -> p { plotTitle = x }))
 
+instance IsLabel "grid" (Property Bool (Plot x y)) where
+  fromLabel = Property (lens plotGrid (\p x -> p { plotGrid = x }))
+
 
 ----------------------------------------
 -- Plot object properties
@@ -446,6 +461,7 @@ data Plot x y = Plot
   , axisLimitX  :: (Maybe (AxisValue x), Maybe (AxisValue x))
   , axisLimitY  :: (Maybe (AxisValue y), Maybe (AxisValue y))
   , plotTitle   :: Maybe String
+  , plotGrid    :: Bool
   }
 
 
@@ -477,6 +493,7 @@ instance Semigroup (Plot x y) where
     , axisLimitX  = axisLimitX a `onFirst` axisLimitX b
     , axisLimitY  = axisLimitY a `onFirst` axisLimitY b
     , plotTitle   = getFirst $ First (plotTitle  a) <> First (plotTitle b)
+    , plotGrid    = plotGrid a || plotGrid b
     }
     where
       onFirst :: forall a. (Maybe a, Maybe a) -> (Maybe a, Maybe a) -> (Maybe a, Maybe a)
@@ -488,6 +505,7 @@ instance Monoid (Plot x y) where
     , axisLimitX  = (Nothing,Nothing)
     , axisLimitY  = (Nothing,Nothing)
     , plotTitle   = mempty
+    , plotGrid    = False
     }
 
 ----------------------------------------------------------------
