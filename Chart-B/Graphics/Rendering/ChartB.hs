@@ -53,6 +53,10 @@ import Graphics.Rendering.ChartB.Impl.Drawing
 import Graphics.Rendering.ChartB.Impl.Axis
 
 
+----------------------------------------------------------------
+-- Rendering of plots
+----------------------------------------------------------------
+
 plotToRenderable :: Plot Numeric Numeric -> Renderable ()
 plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
   { minsize = return (0,0)
@@ -116,22 +120,28 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
       return (const Nothing)
   }
   where
-    fromRange _          (Just a , Just b)  = (a   , b  )
-    fromRange UnknownLim (Nothing, Nothing) = (0   , 1  )
-    fromRange UnknownLim (Just a,  Nothing) = (a   , a+1)
-    fromRange UnknownLim (Nothing, Just b)  = (b-1 , b  )
-    fromRange (MinMaxLimits a b) (Nothing, Nothing)
-      | a == b    = (a - 0.5, a + 0.5)
-      | otherwise = (a - 0.05*d, b + 0.05*d)
-      where d = b - a
-    fromRange (MinMaxLimits _ b) (Just a, Nothing) = (a, b + 0.05*d)
-      where b' = max a b
-            d  = b' - a
-    fromRange (MinMaxLimits a _) (Nothing, Just b) = (a' - 0.05*d, b)
-      where a' = min a b
-            d  = b - a'
+
+fromRange :: AxisRangeEst Numeric -> (Maybe Double, Maybe Double) -> (Double, Double)
+fromRange _          (Just a , Just b)  = (a   , b  )
+fromRange UnknownLim (Nothing, Nothing) = (0   , 1  )
+fromRange UnknownLim (Just a,  Nothing) = (a   , a+1)
+fromRange UnknownLim (Nothing, Just b)  = (b-1 , b  )
+fromRange (MinMaxLimits a b) (Nothing, Nothing)
+  | a == b    = (a - 0.5, a + 0.5)
+  | otherwise = (a - 0.05*d, b + 0.05*d)
+  where d = b - a
+fromRange (MinMaxLimits _ b) (Just a, Nothing) = (a, b + 0.05*d)
+  where b' = max a b
+        d  = b' - a
+fromRange (MinMaxLimits a _) (Nothing, Just b) = (a' - 0.05*d, b)
+  where a' = min a b
+        d  = b - a'
 
 
+
+----------------------------------------------------------------
+-- Concrete plot objects
+----------------------------------------------------------------
 
 scatterplotOf :: (Real a, Real b) => Fold s (a,b) -> s -> PlotObj Numeric Numeric
 {-# INLINE scatterplotOf #-}
