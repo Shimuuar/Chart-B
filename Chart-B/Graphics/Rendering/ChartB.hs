@@ -85,11 +85,14 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
                    <$> mapM (textDimension . show) ticksY
       labelMarginY <-  maximum . map snd
                    <$> mapM (textDimension . show) ticksX
+      titleMarginY <- case plotTitle of
+        Nothing -> return 0
+        Just  s -> snd <$> textDimension s
       -- Compute
       let marginAxis = 5
           viewportTransform = Matrix
             { xx =  (w - marginAxis*3 - labelMarginX)
-            , yy = -(h - marginAxis*3 - labelMarginY)
+            , yy = -(h - marginAxis*3 - labelMarginY - titleMarginY)
             , yx = 0
             , xy = 0
             , x0 = marginAxis * 2 + labelMarginX
@@ -117,6 +120,10 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
         forM_ ticksY $ \y -> do
           let Point x' y' = transformL tr $ Point xA y
           drawTextA HTA_Right VTA_Centre (Point (x'-marginAxis) y') (show y)
+      -- Plot title
+      forM_ plotTitle $ \title -> do
+        let p = transformL viewportTransform $ Point 0.5 1 
+        drawTextA HTA_Centre VTA_Bottom p title
       return (const Nothing)
   }
   where
@@ -327,7 +334,7 @@ instance IsLabel l (Property p a) => IsLabel l (Property p (Endo a)) where
 
 
 ----------------------------------------
--- Plot axes properties
+-- Plot properties
 
 instance ( AxisValue x ~ xlim, AxisValue x ~ xlim'
          ) => IsLabel "xlim" (Property (Maybe xlim, Maybe xlim') (Plot x y)) where
@@ -336,6 +343,13 @@ instance ( AxisValue x ~ xlim, AxisValue x ~ xlim'
 instance ( AxisValue y ~ ylim, AxisValue y ~ ylim'
          ) => IsLabel "ylim" (Property (Maybe ylim, Maybe ylim') (Plot x y)) where
   fromLabel = Property $ lens axisLimitY (\p x -> p { axisLimitY = x })
+
+instance IsLabel "title" (Property [Char] (Plot x y)) where
+  fromLabel = Property (lens plotTitle (\p x -> p { plotTitle = x }))
+            . nonProp ""
+
+instance IsLabel "title" (Property (Maybe [Char]) (Plot x y)) where
+  fromLabel = Property (lens plotTitle (\p x -> p { plotTitle = x }))
 
 
 ----------------------------------------
@@ -431,6 +445,7 @@ data Plot x y = Plot
   { plotObjects :: [PlotObj x y]
   , axisLimitX  :: (Maybe (AxisValue x), Maybe (AxisValue x))
   , axisLimitY  :: (Maybe (AxisValue y), Maybe (AxisValue y))
+  , plotTitle   :: Maybe String
   }
 
 
@@ -459,8 +474,9 @@ instance (Axis x, Axis y) => Monoid (PlotObj x y) where
 instance Semigroup (Plot x y) where
   a <> b = Plot
     { plotObjects = plotObjects a <> plotObjects b
-    , axisLimitX = axisLimitX a `onFirst` axisLimitX b
-    , axisLimitY = axisLimitY a `onFirst` axisLimitY b
+    , axisLimitX  = axisLimitX a `onFirst` axisLimitX b
+    , axisLimitY  = axisLimitY a `onFirst` axisLimitY b
+    , plotTitle   = getFirst $ First (plotTitle  a) <> First (plotTitle b)
     }
     where
       onFirst :: forall a. (Maybe a, Maybe a) -> (Maybe a, Maybe a) -> (Maybe a, Maybe a)
@@ -471,6 +487,7 @@ instance Monoid (Plot x y) where
     { plotObjects = []
     , axisLimitX  = (Nothing,Nothing)
     , axisLimitY  = (Nothing,Nothing)
+    , plotTitle   = mempty
     }
 
 ----------------------------------------------------------------
