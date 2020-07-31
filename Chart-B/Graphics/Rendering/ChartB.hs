@@ -50,7 +50,7 @@ import GHC.OverloadedLabels (IsLabel(..))
 import Graphics.Rendering.ChartB.PlotParam
 import Graphics.Rendering.ChartB.Class
 import Graphics.Rendering.ChartB.Impl.Drawing
-import Graphics.Rendering.ChartB.Impl.Axis
+import Graphics.Rendering.ChartB.Types.Axis
 
 
 ----------------------------------------------------------------

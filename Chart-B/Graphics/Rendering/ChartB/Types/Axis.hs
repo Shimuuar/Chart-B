@@ -7,7 +7,7 @@
 {-# LANGUAGE TypeFamilies        #-}
 -- |
 -- Data types and type classes for working with plot axes.
-module Graphics.Rendering.ChartB.Impl.Axis
+module Graphics.Rendering.ChartB.Types.Axis
   ( -- * Axis
     Axis(..)
     -- ** Concrete axes

@@ -37,4 +37,4 @@ library
         Graphics.Rendering.ChartB.PlotParam
         Graphics.Rendering.ChartB.Class
         Graphics.Rendering.ChartB.Impl.Drawing
-        Graphics.Rendering.ChartB.Impl.Axis
+        Graphics.Rendering.ChartB.Types.Axis
