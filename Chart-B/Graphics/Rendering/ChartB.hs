@@ -81,24 +81,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
       -- Now we need to compute labels for axes, margins for labels
       let ticksX = numericTicks 5 (xA,xB)
           ticksY = numericTicks 5 (yA,yB)
-      labelMarginX <-  maximum . map fst
-                   <$> mapM (textDimension . tickLabel) ticksY
-      labelMarginY <-  maximum . map snd
-                   <$> mapM (textDimension . tickLabel) ticksX
-      titleMarginY <- case plotTitle of
-        Nothing -> return 0
-        Just "" -> return 0
-        Just  s -> snd <$> textDimension s
-      -- Compute
-      let marginAxis = 5
-          viewportTransform = Matrix
-            { xx =  (w - marginAxis*3 - labelMarginX)
-            , yy = -(h - marginAxis*3 - labelMarginY - titleMarginY)
-            , yx = 0
-            , xy = 0
-            , x0 = marginAxis * 2 + labelMarginX
-            , y0 = h - (marginAxis * 2 + labelMarginY)
-            }
+      ViewportLayout{..} <- computeViewportLayout (w,h) plotTitle ticksX ticksY
       let tr = plotTransform * viewportTransform
       -- Draw grid
       when plotGrid $ do
@@ -146,6 +129,40 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
     transformedFold = logTransformX plotLogX
                     $ logTransformY plotLogY
                     $ plotPointData plt
+
+data ViewportLayout = ViewportLayout
+  { marginAxis        :: !Double
+  , labelMarginX      :: !Double
+  , labelMarginY      :: !Double
+  , viewportTransform :: !Matrix
+  }
+
+computeViewportLayout :: (Double,Double) -> Maybe String -> [Tick x] -> [Tick y] -> BackendProgram ViewportLayout
+computeViewportLayout (w,h) title ticksX ticksY = do
+  labelMarginX <- case ticksX of
+    [] -> return 0
+    _  -> maximum . map fst <$> mapM (textDimension . tickLabel) ticksY
+  labelMarginY <- case ticksY of
+    [] -> return 0
+    _  -> maximum . map snd <$> mapM (textDimension . tickLabel) ticksX
+  titleMarginY <- case title of
+    Nothing -> return 0
+    Just "" -> return 0
+    Just  s -> snd <$> textDimension s
+  return ViewportLayout
+    { viewportTransform = Matrix
+        { xx =  (w - marginAxis*3 - labelMarginX)
+        , yy = -(h - marginAxis*3 - labelMarginY - titleMarginY)
+        , yx = 0
+        , xy = 0
+        , x0 = marginAxis * 2 + labelMarginX
+        , y0 = h - (marginAxis * 2 + labelMarginY)
+        }
+    , ..
+    }
+  where
+    marginAxis = 5
+
 
 logTransformX :: Bool -> FoldOverAxes Numeric y -> FoldOverAxes Numeric y
 logTransformX False f = f
@@ -540,7 +557,7 @@ instance Monoid (Plot x y) where
 ----------------------------------------------------------------
 
 numericTicks :: Int -> (AxisValue Numeric, AxisValue Numeric) -> [Tick Numeric]
-numericTicks nTicks (a,b) = 
+numericTicks nTicks (a,b) =
   [ Tick (show x) x | x <- realToFrac <$> steps (fromIntegral nTicks) (a, b) ]
 
 steps :: RealFloat a => a -> (a,a) -> [Rational]
