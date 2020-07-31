@@ -87,6 +87,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
                    <$> mapM (textDimension . show) ticksX
       titleMarginY <- case plotTitle of
         Nothing -> return 0
+        Just "" -> return 0
         Just  s -> snd <$> textDimension s
       -- Compute
       let marginAxis = 5
