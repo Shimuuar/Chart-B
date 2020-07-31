@@ -67,7 +67,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
 
       -- First we need to compute ranges for the plot and transform
       -- from plot coordinates to viewport coordinates
-      let (rngX,rngY) = estimateRange (plotPointData plt) axisLimitX axisLimitY
+      let (rngX,rngY) = estimateRange transformedFold axisLimitX axisLimitY
           (xA,xB)     = fromRange rngX axisLimitX
           (yA,yB)     = fromRange rngY axisLimitY
           dX          = xB - xA
@@ -114,7 +114,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
             strokeAlignedPointPath [p1, p2]
       -- Draw plots
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
-        $ runDrawing tr id id $ plotFunction plt (plotParam plt)
+        $ runDrawing tr funX funY $ plotFunction plt (plotParam plt)
       -- Plot axes on top of everything else
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 0 1]
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 1 0]
@@ -135,11 +135,28 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
           drawTextA HTA_Right VTA_Centre (Point (x'-marginAxis) y') (show y)
       -- Plot title
       forM_ plotTitle $ \title -> do
-        let p = transformL viewportTransform $ Point 0.5 1 
+        let p = transformL viewportTransform $ Point 0.5 1
         drawTextA HTA_Centre VTA_Bottom p title
       return (const Nothing)
   }
   where
+    funX = if plotLogX then logBase 10 else id
+    funY = if plotLogY then logBase 10 else id
+    -- Apply log transformation
+    transformedFold = logTransformX plotLogX
+                    $ logTransformY plotLogY
+                    $ plotPointData plt
+
+logTransformX :: Bool -> FoldOverAxes Numeric y -> FoldOverAxes Numeric y
+logTransformX False f = f
+logTransformX True  (FoldOverAxes f) = FoldOverAxes $ \stepXY stepX stepY ->
+  f (\a x y -> stepXY a (logBase 10 x) y) (\a x -> stepX a (logBase 10 x)) (stepY)
+
+logTransformY :: Bool -> FoldOverAxes x Numeric -> FoldOverAxes x Numeric
+logTransformY False f = f
+logTransformY True  (FoldOverAxes f) = FoldOverAxes $ \stepXY stepX stepY ->
+  f (\a x y -> stepXY a x (logBase 10 y)) stepX (\a y -> stepY a (logBase 10 y))
+
 
 fromRange :: AxisRangeEst Numeric -> (Maybe Double, Maybe Double) -> (Double, Double)
 fromRange _          (Just a , Just b)  = (a   , b  )
