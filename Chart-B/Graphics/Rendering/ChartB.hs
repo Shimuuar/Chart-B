@@ -83,21 +83,16 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
           ticksY = numericTicks 5 (yA,yB)
       ViewportLayout{..} <- computeViewportLayout (w,h) plotTitle ticksX ticksY
       let tr = plotTransform * viewportTransform
-      -- Draw grid
-      when plotGrid $ do
-        let gridStyle = def & line_color .~ opaque lightgray
-        withLineStyle gridStyle $ do
-          forM_ ticksX $ \(Tick _ x) -> do
-            let p1 = transformL tr $ Point x yA
-                p2 = transformL tr $ Point x yB
-            strokeAlignedPointPath [p1, p2]
-          forM_ ticksY $ \(Tick _ y) -> do
-            let p1 = transformL tr $ Point xA y
-                p2 = transformL tr $ Point xB y
-            strokeAlignedPointPath [p1, p2]
       -- Draw plots
-      withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
-        $ runDrawing tr funX funY $ plotFunction plt (plotParam plt)
+      withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1)) $
+        runDrawing tr funX funY $ do
+          when plotGrid $ do
+            let gridStyle = def & line_color .~ opaque lightgray
+            forM_ ticksX $ \(Tick _ x) -> do
+              liftedDrawAlignedLines gridStyle [(x,yA), (x,yB)]
+            forM_ ticksY $ \(Tick _ y) -> do
+              liftedDrawAlignedLines gridStyle [(xA,y), (xB,y)]
+          plotFunction plt (plotParam plt)
       -- Plot axes on top of everything else
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 0 1]
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 1 0]

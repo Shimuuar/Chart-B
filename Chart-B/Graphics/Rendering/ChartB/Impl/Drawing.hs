@@ -71,6 +71,12 @@ liftedDrawLines style pts = Drawing $ do
   lift $ lift $ withLineStyle style $ strokePointPath
     [ transformL tr $ Point (fx x) (fy y) | (x,y) <- pts ]
 
+liftedDrawAlignedLines :: LineStyle -> [(AxisValue x, AxisValue y)] -> Drawing x y ()
+liftedDrawAlignedLines style pts = Drawing $ do
+  (tr,fx,fy) <- ask
+  lift $ lift $ withLineStyle style $ strokeAlignedPointPath
+    [ transformL tr $ Point (fx x) (fy y) | (x,y) <- pts ]
+
 liftedFillPath :: FillStyle -> [(AxisValue x, AxisValue y)] -> Drawing x y ()
 liftedFillPath style pts = Drawing $ do
   (tr,fx,fy) <- ask
