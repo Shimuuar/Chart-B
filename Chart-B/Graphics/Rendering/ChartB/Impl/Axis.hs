@@ -6,7 +6,19 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 -- |
-module Graphics.Rendering.ChartB.Impl.Axis where
+-- Data types and type classes for working with plot axes.
+module Graphics.Rendering.ChartB.Impl.Axis
+  ( -- * Axis
+    Axis(..)
+    -- ** Concrete axes
+  , Numeric
+  , AxisRangeEst(UnknownLim,MinMaxLimits)
+    -- * Range estimation
+  , FoldOverAxes(..)
+  , filterAxisX
+  , filterAxisY
+  , estimateRange
+  ) where
 
 import Data.Proxy
 
@@ -31,11 +43,13 @@ instance Semigroup (FoldOverAxes x y) where
 instance Monoid (FoldOverAxes x y) where
   mempty = FoldOverAxes $ \_ _ _ -> id
 
+-- | Only fold over values with X coordinate satisfying predicate
 filterAxisX :: (AxisValue x -> Bool) -> FoldOverAxes x y -> FoldOverAxes x y
 filterAxisX predX (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX
   -> fun (\a x y -> if predX x then stepXY a x y else a)
          (\a x   -> if predX x then stepX  a x   else a)
 
+-- | Only fold over values with Y coordinate satisfying predicate
 filterAxisY :: (AxisValue y -> Bool) -> FoldOverAxes x y -> FoldOverAxes x y
 filterAxisY predY (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX stepY
   -> fun (\a x y -> if predY y then stepXY a x y else a)
@@ -52,15 +66,15 @@ class Monoid (AxisRangeEst a) => Axis a where
   data AxisRangeEst a
   -- | True if value is within axis range
   axisValueInRange :: Proxy a -> AxisRange a -> AxisValue a -> Bool
-  -- | 
+  -- |
   axisEsimator :: AxisValue a -> AxisRangeEst a
 
-
+-- | Estimate range for the axis for given data
 estimateRange
   :: forall x y. (Axis x, Axis y)
-  => FoldOverAxes x y
-  -> AxisRange x
-  -> AxisRange y
+  => FoldOverAxes x y           -- ^
+  -> AxisRange x                -- ^
+  -> AxisRange y                -- ^
   -> (AxisRangeEst x, AxisRangeEst y)
 estimateRange points rngX rngY = (rX,rY)
   where
