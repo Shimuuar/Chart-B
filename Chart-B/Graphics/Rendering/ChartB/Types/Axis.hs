@@ -10,6 +10,7 @@
 module Graphics.Rendering.ChartB.Types.Axis
   ( -- * Axis
     Axis(..)
+  , Tick(..)
     -- ** Concrete axes
   , Numeric
   , AxisRangeEst(UnknownLim,MinMaxLimits)
@@ -93,6 +94,14 @@ estimateRange points rngX rngY = (rX,rY)
         (\(Pair mX mY) x   -> Pair (mX <> axisEsimator x)  mY)
         (\(Pair mX mY)   y -> Pair  mX                    (mY <> axisEsimator y))
         mempty
+
+
+-- | Named tick on an axis.
+data Tick a = Tick
+  { tickLabel :: String
+  , tickValue :: AxisValue a
+  }
+
 
 
 ----------------------------------------------------------------

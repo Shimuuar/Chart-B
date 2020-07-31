@@ -79,12 +79,12 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
             , y0 = -yA / dY
             }
       -- Now we need to compute labels for axes, margins for labels
-      let ticksX = map realToFrac $ steps 5 (xA,xB)
-          ticksY = map realToFrac $ steps 5 (yA,yB)
+      let ticksX = numericTicks 5 (xA,xB)
+          ticksY = numericTicks 5 (yA,yB)
       labelMarginX <-  maximum . map fst
-                   <$> mapM (textDimension . show) ticksY
+                   <$> mapM (textDimension . tickLabel) ticksY
       labelMarginY <-  maximum . map snd
-                   <$> mapM (textDimension . show) ticksX
+                   <$> mapM (textDimension . tickLabel) ticksX
       titleMarginY <- case plotTitle of
         Nothing -> return 0
         Just "" -> return 0
@@ -104,11 +104,11 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
       when plotGrid $ do
         let gridStyle = def & line_color .~ opaque lightgray
         withLineStyle gridStyle $ do
-          forM_ ticksX $ \x -> do
+          forM_ ticksX $ \(Tick _ x) -> do
             let p1 = transformL tr $ Point x yA
                 p2 = transformL tr $ Point x yB
             strokeAlignedPointPath [p1, p2]
-          forM_ ticksY $ \y -> do
+          forM_ ticksY $ \(Tick _ y) -> do
             let p1 = transformL tr $ Point xA y
                 p2 = transformL tr $ Point xB y
             strokeAlignedPointPath [p1, p2]
@@ -119,20 +119,20 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 0 1]
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 1 0]
       withLineStyle def $ do
-        forM_ ticksX $ \x -> do
+        forM_ ticksX $ \(Tick _ x) -> do
           let Point px py = transformL tr $ Point x yA
           strokeAlignedPointPath [Point px py, Point px (py-5)]
-        forM_ ticksY $ \y -> do
+        forM_ ticksY $ \(Tick _ y) -> do
           let Point px py = transformL tr $ Point xA y
           strokeAlignedPointPath [ Point px py, Point (px+5) py ]
       -- Plot labels
       withFontStyle def $ do
-        forM_ ticksX $ \x -> do
+        forM_ ticksX $ \(Tick nm x) -> do
           let Point x' y' = transformL tr $ Point x yA
-          drawTextA HTA_Centre VTA_Top (Point x' (y'+2)) (show x)
-        forM_ ticksY $ \y -> do
+          drawTextA HTA_Centre VTA_Top (Point x' (y'+2)) nm
+        forM_ ticksY $ \(Tick nm y) -> do
           let Point x' y' = transformL tr $ Point xA y
-          drawTextA HTA_Right VTA_Centre (Point (x'-marginAxis) y') (show y)
+          drawTextA HTA_Right VTA_Centre (Point (x'-marginAxis) y') nm
       -- Plot title
       forM_ plotTitle $ \title -> do
         let p = transformL viewportTransform $ Point 0.5 1
@@ -539,6 +539,9 @@ instance Monoid (Plot x y) where
 -- Axes
 ----------------------------------------------------------------
 
+numericTicks :: Int -> (AxisValue Numeric, AxisValue Numeric) -> [Tick Numeric]
+numericTicks nTicks (a,b) = 
+  [ Tick (show x) x | x <- realToFrac <$> steps (fromIntegral nTicks) (a, b) ]
 
 steps :: RealFloat a => a -> (a,a) -> [Rational]
 steps nSteps rs@(minV,maxV) = map ((s*) . fromIntegral) [min' .. max']
