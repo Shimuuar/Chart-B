@@ -275,8 +275,6 @@ toOutline zero = concat . transformAdjacent
                              ]
       )
 
-    -- asBars [(x1,y1)
-
 
 transformAdjacent
   :: (a -> b)
