@@ -365,6 +365,12 @@ instance IsLabel "title" (Property (Maybe [Char]) (Plot x y)) where
 instance IsLabel "grid" (Property Bool (Plot x y)) where
   fromLabel = Property (lens plotGrid (\p x -> p { plotGrid = x }))
 
+instance IsLabel "logx" (Property Bool (Plot x y)) where
+  fromLabel = Property (lens plotLogX (\p x -> p { plotLogX = x }))
+
+instance IsLabel "logy" (Property Bool (Plot x y)) where
+  fromLabel = Property (lens plotLogY (\p x -> p { plotLogY = x }))
+
 
 ----------------------------------------
 -- Plot object properties
@@ -459,8 +465,10 @@ data Plot x y = Plot
   { plotObjects :: [PlotObj x y]
   , axisLimitX  :: (Maybe (AxisValue x), Maybe (AxisValue x))
   , axisLimitY  :: (Maybe (AxisValue y), Maybe (AxisValue y))
-  , plotTitle   :: Maybe String
-  , plotGrid    :: Bool
+  , plotTitle   :: !(Maybe String)
+  , plotGrid    :: !Bool
+  , plotLogX    :: !Bool
+  , plotLogY    :: !Bool
   }
 
 
@@ -493,6 +501,8 @@ instance Semigroup (Plot x y) where
     , axisLimitY  = axisLimitY a `onFirst` axisLimitY b
     , plotTitle   = getFirst $ First (plotTitle  a) <> First (plotTitle b)
     , plotGrid    = plotGrid a || plotGrid b
+    , plotLogX    = plotLogX a || plotLogX b
+    , plotLogY    = plotLogY a || plotLogY b
     }
     where
       onFirst :: forall a. (Maybe a, Maybe a) -> (Maybe a, Maybe a) -> (Maybe a, Maybe a)
@@ -505,6 +515,8 @@ instance Monoid (Plot x y) where
     , axisLimitY  = (Nothing,Nothing)
     , plotTitle   = mempty
     , plotGrid    = False
+    , plotLogX    = False
+    , plotLogY    = False
     }
 
 ----------------------------------------------------------------
