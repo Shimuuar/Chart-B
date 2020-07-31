@@ -61,12 +61,17 @@ filterAxisY predY (FoldOverAxes fun) = FoldOverAxes $ \stepXY stepX stepY
 -- | Type class for axis which is classified according to what kind of
 --   data is stored there.
 class Monoid (AxisRangeEst a) => Axis a where
+  -- | Value whis used for plotting. For example it's 'Double' for
+  --   'Numeric' axes. However it's possible to use value that could
+  --   be converted to that type.
   type AxisValue    a
+  -- | Constraint on ais range provided by user.
   type AxisRange    a
+  -- | Estimator for axis range
   data AxisRangeEst a
   -- | True if value is within axis range
   axisValueInRange :: Proxy a -> AxisRange a -> AxisValue a -> Bool
-  -- |
+  -- | Convert axis value into range estimator
   axisEsimator :: AxisValue a -> AxisRangeEst a
 
 -- | Estimate range for the axis for given data
