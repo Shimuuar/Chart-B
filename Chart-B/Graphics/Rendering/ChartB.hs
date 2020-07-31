@@ -114,7 +114,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
             strokeAlignedPointPath [p1, p2]
       -- Draw plots
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1))
-        $ runDrawing tr $ plotFunction plt (plotParam plt)
+        $ runDrawing tr id id $ plotFunction plt (plotParam plt)
       -- Plot axes on top of everything else
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 0 1]
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 1 0]
@@ -182,17 +182,16 @@ lineplotOf optic xy = PlotObj
                   & prop (#marker . #shape) .~ Nothing
   }
 
-scatterplotRender :: Fold s (Double,Double) -> s -> Endo PlotParam -> Drawing ()
+scatterplotRender :: Fold s (Double,Double) -> s -> Endo PlotParam -> Drawing Numeric Numeric ()
 scatterplotRender optic xy = newPlot >=> \p -> do
   -- Draw lines
   --
   -- FIXME: do not materialize list
   usingLineStype p $ \style ->
-    liftedDrawLines style $ xy ^.. optic . to (uncurry Point)
+    liftedDrawLines style $ xy ^.. optic
   -- Draw markers
   usingPointStype p $ \style ->
-    forMOf_ optic xy $ \(x,y) -> do
-      liftedDrawPoint style $ Point x y
+    forMOf_ optic xy $ liftedDrawPoint style
 
 
 
@@ -210,7 +209,7 @@ barplotOf params optic xy = PlotObj
   --
   , plotPointData = FoldOverAxes $ \stepXY stepX stepY a0 ->
       case param ^. barplotOutline of
-        True  -> foldl' (\a (Point x y) -> stepXY a x y) a0 asOutline
+        True  -> foldl' (\a (x,y) -> stepXY a x y) a0 asOutline
         False -> flip stepY zero
                $ foldl' (\a (Bar x1 x2 y) -> flip stepY y $ flip stepX x2 $ flip stepX x1 a) a0 asBars
   --
@@ -224,10 +223,10 @@ barplotOf params optic xy = PlotObj
     normalBarplot p = do
       usingFillStype p $ \style ->
         forM_ asBars $ \(Bar x1 x2 y) ->
-          liftedFillPath style $ [ Point x1 zero, Point x1 y, Point x2 y, Point x2 zero ]
+          liftedFillPath style $ [ (x1, zero), (x1, y), (x2, y), (x2, zero) ]
       usingLineStype p $ \style ->
         forM_ asBars $ \(Bar x1 x2 y) ->
-          liftedDrawLines style $ [ Point x1 zero, Point x1 y, Point x2 y, Point x2 zero ]
+          liftedDrawLines style $ [ (x1, zero), (x1, y), (x2, y), (x2, zero) ]
     --
     outlineBarplot p = do
       usingFillStype p $ \style ->
@@ -250,28 +249,28 @@ toBars = transformAdjacent
       , \       (xA,_) (x,y)  -> let dx = (x - xA)/2 in Bar (x-dx) (x+dx) y
       )
 
-toOutline :: Double -> [(Double, Double)] -> [Point]
+toOutline :: Double -> [(Double, Double)] -> [(Double,Double)]
 toOutline zero = concat . transformAdjacent
-      ( \(x,y) -> [ Point (x-0.5) zero
-                  , Point (x-0.5) y
-                  , Point (x+0.5) y
-                  , Point (x+0.5) zero
+      ( \(x,y) -> [ (x-0.5, zero)
+                  , (x-0.5, y)
+                  , (x+0.5, y)
+                  , (x+0.5, zero)
                   ])
       ( \(x,y)  (xB,_)        -> let dX = (xB - x)/2 in
-                                   [ Point (x-dX) zero
-                                   , Point (x-dX) y
-                                   , Point (x+dX) y
+                                   [ (x-dX, zero)
+                                   , (x-dX, y)
+                                   , (x+dX, y)
                                    ]
       , \(xA,yA) (x,y)  (xB,_) ->
-          [ Point ((xA+x)/2) yA
-          , Point ((xA+x)/2) y
-          , Point ((x+xB)/2) y
+          [ ((xA+x)/2, yA)
+          , ((xA+x)/2, y)
+          , ((x+xB)/2, y)
           ]
       , \(xA,yA) (x,y)  -> let dX = (x - xA)/2 in
-                             [ Point (x-dX) yA
-                             , Point (x-dX) y
-                             , Point (x+dX) y
-                             , Point (x+dX) zero
+                             [ (x-dX, yA)
+                             , (x-dX, y)
+                             , (x+dX, y)
+                             , (x+dX, zero)
                              ]
       )
 
@@ -474,7 +473,7 @@ data Plot x y = Plot
 
 -- | Single entity on plog
 data PlotObj x y = PlotObj
-  { plotFunction  :: Endo PlotParam -> Drawing ()
+  { plotFunction  :: Endo PlotParam -> Drawing x y ()
   , plotPointData :: FoldOverAxes x y
   , plotParam     :: Endo PlotParam
   }

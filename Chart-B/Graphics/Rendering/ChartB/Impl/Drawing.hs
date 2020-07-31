@@ -16,6 +16,7 @@ import Graphics.Rendering.Chart.Geometry
 
 import Graphics.Rendering.ChartB.Class
 import Graphics.Rendering.ChartB.PlotParam
+import Graphics.Rendering.ChartB.Impl.Axis
 import Graphics.Rendering.Chart.Backend
 import Graphics.Rendering.Chart.Backend.Impl
 
@@ -25,13 +26,20 @@ import Graphics.Rendering.Chart.Backend.Impl
 
 -- | Wrapper on top of BackendProgram for drawing. It keeps track of
 --   current viewport transformation and color wheel.
-newtype Drawing a = Drawing (StateT [AlphaColour Double] (ReaderT Matrix (Program ChartBackendInstr)) a)
+newtype Drawing x y a = Drawing
+  { unDrawing :: StateT [AlphaColour Double]
+      (ReaderT (Matrix, AxisValue x -> Double, AxisValue y -> Double) (Program ChartBackendInstr)) a }
   deriving newtype (Functor, Applicative, Monad)
 
 -- | Execute drawing program
-runDrawing :: Matrix -> Drawing a -> BackendProgram a
-runDrawing tr (Drawing act)
-  = flip runReaderT tr
+runDrawing
+  :: Matrix
+  -> (AxisValue x -> Double)
+  -> (AxisValue y -> Double)
+  -> Drawing x y a
+  -> BackendProgram a
+runDrawing tr viewX viewY (Drawing act)
+  = flip runReaderT (tr, viewX, viewY)
   $ evalStateT act defColors
   where
     -- Since each plot advances color wheel before we start plotting
@@ -39,33 +47,36 @@ runDrawing tr (Drawing act)
     defColors = opaque blue
               : cycle (map opaque $ [blue, red, green, orange, cyan, magenta])
 
-newPlot :: Endo PlotParam -> Drawing PlotParam
+newPlot :: Endo PlotParam -> Drawing x y PlotParam
 newPlot pEndo = do
   advanceColorWheel
   appEndo pEndo <$> getDefaultPlotParam
 
-advanceColorWheel :: Drawing ()
+advanceColorWheel :: Drawing x y ()
 advanceColorWheel = Drawing $ modify tail
 
-getDefaultPlotParam :: Drawing PlotParam
+getDefaultPlotParam :: Drawing x y PlotParam
 getDefaultPlotParam = Drawing $ do
   c <- head <$> get
   return $ def & plotMainColor .~ c
 
-liftedDrawPoint :: PointStyle -> Point -> Drawing ()
-liftedDrawPoint st p = do
-  tr <- Drawing ask
-  Drawing $ lift $ lift $ drawPoint st (transformL tr p)
+liftedDrawPoint :: PointStyle -> (AxisValue x, AxisValue y) -> Drawing x y ()
+liftedDrawPoint st (x,y) = Drawing $ do
+  (tr,fx,fy) <- ask
+  lift $ lift $ drawPoint st (transformL tr $ Point (fx x) (fy y))
+  
 
-liftedDrawLines :: LineStyle -> [Point] -> Drawing ()
+liftedDrawLines :: LineStyle -> [(AxisValue x, AxisValue y)] -> Drawing x y ()
 liftedDrawLines style pts = Drawing $ do
-  tr <- ask
-  lift $ lift $ withLineStyle style $ strokePointPath $ transformL tr <$> pts
+  (tr,fx,fy) <- ask
+  lift $ lift $ withLineStyle style $ strokePointPath
+    [ transformL tr $ Point (fx x) (fy y) | (x,y) <- pts ]
 
-liftedFillPath :: FillStyle -> [Point] -> Drawing ()
+liftedFillPath :: FillStyle -> [(AxisValue x, AxisValue y)] -> Drawing x y ()
 liftedFillPath style pts = Drawing $ do
-  tr <- ask
-  lift $ lift $ withFillStyle style $ fillPointPath $ transformL tr <$> pts
+  (tr,fx,fy) <- ask
+  lift $ lift $ withFillStyle style $ fillPointPath 
+    [ transformL tr $ Point (fx x) (fy y) | (x,y) <- pts ]
 
 strokeAlignedPointPath :: [Point] -> BackendProgram ()
 strokeAlignedPointPath = strokePointPath <=< alignStrokePoints
