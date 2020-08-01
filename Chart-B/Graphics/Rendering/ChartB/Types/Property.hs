@@ -7,12 +7,15 @@
 -- |
 module Graphics.Rendering.ChartB.Types.Property
   ( Property(..)
+    -- * Helpers
   , endoL
+  , nonProp
   ) where
 
 import Control.Lens
 import Control.Category
 import Data.Distributive
+import Data.Maybe
 import Data.Monoid
 import Prelude hiding ((.),id)
 import GHC.OverloadedLabels (IsLabel(..))
@@ -34,3 +37,5 @@ instance IsLabel l (Property p a) => IsLabel l (Property p (Endo a)) where
 endoL :: Setter' (Endo a) a
 endoL fun (Endo f) = fmap Endo $ distribute $ fun . f
 
+nonProp :: a -> Property a (Maybe a)
+nonProp x0 = Property $ \f -> fmap Just . f . fromMaybe x0
