@@ -18,7 +18,7 @@ module Graphics.Rendering.ChartB
     plotToRenderable
   , plot
   , Numeric
-  , prop
+  , Property(..)
     -- ** Indivudal plot types
   , scatterplotOf
   , lineplotOf
@@ -46,11 +46,11 @@ import Data.Colour
 import Data.Colour.Names
 import GHC.OverloadedLabels (IsLabel(..))
 
-
 import Graphics.Rendering.ChartB.PlotParam
 import Graphics.Rendering.ChartB.Class
 import Graphics.Rendering.ChartB.Impl.Drawing
 import Graphics.Rendering.ChartB.Types.Axis
+import Graphics.Rendering.ChartB.Types.Property
 
 
 ----------------------------------------------------------------
@@ -361,15 +361,6 @@ usingFillStype p action = do
 -- Properties
 ----------------------------------------------------------------
 
-newtype Property a s = Property { prop :: Setter' s a }
-
-instance Category Property where
-  id = id
-  Property f . Property g = Property (f . g)
-
-
-instance IsLabel l (Property p a) => IsLabel l (Property p (Endo a)) where
-  fromLabel = Property endoL . fromLabel @l
 
 
 ----------------------------------------

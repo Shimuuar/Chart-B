@@ -90,9 +90,6 @@ instance Default BarplotParams where
     , _barplotOutline = False
     }
 
-endoL :: Setter' (Endo a) a
-endoL fun (Endo f) = fmap Endo $ distribute $ fun . f
-
 $(makeLenses ''PlotParam)
 $(makeLenses ''MarkerParam)
 $(makeLenses ''LineParam)

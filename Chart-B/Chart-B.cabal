@@ -38,3 +38,4 @@ library
         Graphics.Rendering.ChartB.Class
         Graphics.Rendering.ChartB.Impl.Drawing
         Graphics.Rendering.ChartB.Types.Axis
+        Graphics.Rendering.ChartB.Types.Property
