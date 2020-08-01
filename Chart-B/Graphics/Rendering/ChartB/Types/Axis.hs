@@ -3,6 +3,7 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 -- |
@@ -10,6 +11,9 @@
 module Graphics.Rendering.ChartB.Types.Axis
   ( -- * Axis
     Axis(..)
+  , AxisParam(..)
+  , axisLimits
+  , axisLogScale
   , Tick(..)
     -- ** Concrete axes
   , Numeric
@@ -21,8 +25,11 @@ module Graphics.Rendering.ChartB.Types.Axis
   , estimateRange
   ) where
 
+import Control.Lens
+import Data.Coerce
 import Data.Proxy
-
+import Data.Monoid
+import Data.Default.Class
 
 ----------------------------------------------------------------
 -- Generic API for axes
@@ -93,13 +100,37 @@ estimateRange points rngX rngY = (rX,rY)
         (\(Pair mX mY)   y -> Pair  mX                    (mY <> axisEsimator y))
         mempty
 
-
 -- | Named tick on an axis.
 data Tick a = Tick
   { tickLabel :: String
   , tickValue :: AxisValue a
   }
 
+-- | Parameter for axis.
+data AxisParam a = AxisParam
+  { _axisLimits   :: !(Maybe (AxisValue a), Maybe (AxisValue a))
+    -- ^ User specified limits.
+  , _axisLogScale :: Bool
+    -- ^ Whether to use log scale.
+  }
+
+instance Default (AxisParam a) where
+  def = AxisParam
+    { _axisLimits   = (Nothing,Nothing)
+    , _axisLogScale = False
+    }
+
+instance Semigroup (AxisParam a) where
+  a <> b = AxisParam
+    { _axisLimits   = onFirst (_axisLimits a) (_axisLimits b)
+    , _axisLogScale = _axisLogScale a || _axisLogScale b
+    }
+    where
+      onFirst :: forall b. (Maybe b, Maybe b) -> (Maybe b, Maybe b) -> (Maybe b, Maybe b)
+      onFirst x y = coerce (coerce x <> coerce y :: (First b, First b))
+
+instance Monoid (AxisParam a) where
+  mempty = def
 
 
 ----------------------------------------------------------------
@@ -149,3 +180,6 @@ instance (Monoid a, Monoid b) => Monoid (Pair a b) where
   Pair x y `mappend` Pair x' y' = Pair (x `mappend` x') (y `mappend` y')
   {-# INLINABLE mempty  #-}
   {-# INLINABLE mappend #-}
+
+
+$(makeLenses ''AxisParam)
