@@ -67,11 +67,9 @@ class Monoid (AxisRangeEst a) => Axis a where
   --   be converted to that type.
   type AxisValue    a
   -- | Constraint on ais range provided by user.
-  type AxisRange    a
-  -- | Estimator for axis range
   data AxisRangeEst a
   -- | True if value is within axis range
-  axisValueInRange :: Proxy a -> AxisRange a -> AxisValue a -> Bool
+  axisValueInRange :: Proxy a -> (Maybe (AxisValue a), Maybe (AxisValue a)) -> AxisValue a -> Bool
   -- | Convert axis value into range estimator
   axisEsimator :: AxisValue a -> AxisRangeEst a
 
@@ -79,8 +77,8 @@ class Monoid (AxisRangeEst a) => Axis a where
 estimateRange
   :: forall x y. (Axis x, Axis y)
   => FoldOverAxes x y           -- ^
-  -> AxisRange x                -- ^
-  -> AxisRange y                -- ^
+  -> (Maybe (AxisValue x), Maybe (AxisValue x)) -- ^
+  -> (Maybe (AxisValue y), Maybe (AxisValue y)) -- ^
   -> (AxisRangeEst x, AxisRangeEst y)
 estimateRange points rngX rngY = (rX,rY)
   where
@@ -113,7 +111,6 @@ data Numeric
 
 instance Axis Numeric where
   type AxisValue    Numeric = Double
-  type AxisRange    Numeric = (Maybe Double, Maybe Double)
   data AxisRangeEst Numeric
     = UnknownLim
     | MinMaxLimits !Double !Double
