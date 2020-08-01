@@ -34,8 +34,8 @@ library
 
   Exposed-modules:
         Graphics.Rendering.ChartB
-        Graphics.Rendering.ChartB.PlotParam
         Graphics.Rendering.ChartB.Class
         Graphics.Rendering.ChartB.Impl.Drawing
         Graphics.Rendering.ChartB.Types.Axis
+        Graphics.Rendering.ChartB.Types.PlotParam
         Graphics.Rendering.ChartB.Types.Property

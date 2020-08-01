@@ -15,7 +15,7 @@ import Graphics.Rendering.Chart.Drawing
 import Graphics.Rendering.Chart.Geometry
 
 import Graphics.Rendering.ChartB.Class
-import Graphics.Rendering.ChartB.PlotParam
+import Graphics.Rendering.ChartB.Types.PlotParam
 import Graphics.Rendering.ChartB.Types.Axis
 import Graphics.Rendering.Chart.Backend.Impl
 

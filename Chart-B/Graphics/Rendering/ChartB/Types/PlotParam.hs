@@ -7,7 +7,7 @@
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 -- |
-module Graphics.Rendering.ChartB.PlotParam where
+module Graphics.Rendering.ChartB.Types.PlotParam where
 
 import Data.Default.Class
 import Data.Monoid
