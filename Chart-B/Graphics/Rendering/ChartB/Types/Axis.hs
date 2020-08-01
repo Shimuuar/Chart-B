@@ -79,29 +79,23 @@ class Monoid (AxisRangeEst a) => Axis a where
   type AxisValue    a
   -- | Constraint on ais range provided by user.
   data AxisRangeEst a
-  -- | True if value is within axis range
-  axisValueInRange :: Proxy a -> (Maybe (AxisValue a), Maybe (AxisValue a)) -> AxisValue a -> Bool
   -- | Convert axis value into range estimator
-  axisEsimator :: AxisValue a -> AxisRangeEst a
+  axisEsimator :: AxisParam a -> AxisValue a -> AxisRangeEst a
 
 -- | Estimate range for the axis for given data
 estimateRange
   :: forall x y. (Axis x, Axis y)
-  => FoldOverAxes x y           -- ^
-  -> (Maybe (AxisValue x), Maybe (AxisValue x)) -- ^
-  -> (Maybe (AxisValue y), Maybe (AxisValue y)) -- ^
+  => FoldOverAxes x y  -- ^
+  -> AxisParam x       -- ^
+  -> AxisParam y       -- ^
   -> (AxisRangeEst x, AxisRangeEst y)
-estimateRange points rngX rngY = (rX,rY)
+estimateRange points axisX axisY = (rX,rY)
   where
     Pair rX rY
-      = ( foldOverAxes
-        $ filterAxisX (axisValueInRange (Proxy @x) rngX)
-        $ filterAxisY (axisValueInRange (Proxy @y) rngY)
-        $ points
-        )
-        (\(Pair mX mY) x y -> Pair (mX <> axisEsimator x) (mY <> axisEsimator y))
-        (\(Pair mX mY) x   -> Pair (mX <> axisEsimator x)  mY)
-        (\(Pair mX mY)   y -> Pair  mX                    (mY <> axisEsimator y))
+      = (foldOverAxes points)
+        (\(Pair mX mY) x y -> Pair (mX <> axisEsimator axisX x) (mY <> axisEsimator axisY y))
+        (\(Pair mX mY) x   -> Pair (mX <> axisEsimator axisX x)  mY)
+        (\(Pair mX mY)   y -> Pair  mX                          (mY <> axisEsimator axisY y))
         mempty
 
 -- | Named tick on an axis.
@@ -151,12 +145,16 @@ instance Axis Numeric where
     | MinMaxLimits !Double !Double
     deriving (Show)
   --
-  axisValueInRange _ (Nothing, Nothing) _ = True
-  axisValueInRange _ (Just a,  Nothing) x = x >= a
-  axisValueInRange _ (Nothing, Just b ) x = x <= b
-  axisValueInRange _ (Just a,  Just b ) x = x >= a && x <= b
-  --
-  axisEsimator x = MinMaxLimits x x
+  axisEsimator p x
+    | _axisLogScale p && x < 0 = mempty
+    | otherwise                = case _axisLimits p of
+        (Nothing, Nothing)                    -> est
+        (Just a,  Nothing) | x >= a           -> est
+        (Nothing, Just b ) | x <= b           -> est
+        (Just a,  Just b ) | x >= a && x <= b -> est
+        _                                     -> mempty
+    where
+      est = MinMaxLimits x x
 
 instance Semigroup (AxisRangeEst Numeric) where
   UnknownLim <> x = x

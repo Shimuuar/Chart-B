@@ -66,9 +66,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
 
       -- First we need to compute ranges for the plot and transform
       -- from plot coordinates to viewport coordinates
-      let (rngX,rngY) = estimateRange transformedFold
-                          (axisX ^. axisLimits)
-                          (axisY ^. axisLimits)
+      let (rngX,rngY) = estimateRange transformedFold axisX axisY
           (xA,xB)     = fromRange rngX $ axisX ^. axisLimits
           (yA,yB)     = fromRange rngY $ axisY ^. axisLimits
           dX          = xB - xA
