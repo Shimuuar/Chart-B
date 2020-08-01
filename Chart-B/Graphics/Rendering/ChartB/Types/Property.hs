@@ -7,6 +7,7 @@
 -- |
 module Graphics.Rendering.ChartB.Types.Property
   ( Property(..)
+  , IsLabel(..)
     -- * Helpers
   , endoL
   , nonProp

@@ -1,11 +1,13 @@
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
 -- |
 -- Data types and type classes for working with plot axes.
 module Graphics.Rendering.ChartB.Types.Axis
@@ -30,6 +32,8 @@ import Data.Coerce
 import Data.Proxy
 import Data.Monoid
 import Data.Default.Class
+import Graphics.Rendering.ChartB.Types.Property
+
 
 ----------------------------------------------------------------
 -- Generic API for axes
@@ -183,3 +187,10 @@ instance (Monoid a, Monoid b) => Monoid (Pair a b) where
 
 
 $(makeLenses ''AxisParam)
+
+instance ( lim ~ AxisValue a, lim' ~ AxisValue a
+         ) => IsLabel "lim" (Property (Maybe lim, Maybe lim') (AxisParam a)) where
+  fromLabel = Property axisLimits
+
+instance IsLabel "log" (Property Bool (AxisParam a)) where
+  fromLabel = Property axisLogScale

@@ -30,7 +30,6 @@ module Graphics.Rendering.ChartB
 
 import Data.Default.Class
 import Data.Monoid
-import Data.Coerce
 import Data.Foldable
 import Data.Maybe
 import Data.Ord
@@ -67,9 +66,11 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
 
       -- First we need to compute ranges for the plot and transform
       -- from plot coordinates to viewport coordinates
-      let (rngX,rngY) = estimateRange transformedFold axisLimitX axisLimitY
-          (xA,xB)     = fromRange rngX axisLimitX
-          (yA,yB)     = fromRange rngY axisLimitY
+      let (rngX,rngY) = estimateRange transformedFold
+                          (axisX ^. axisLimits)
+                          (axisY ^. axisLimits)
+          (xA,xB)     = fromRange rngX $ axisX ^. axisLimits
+          (yA,yB)     = fromRange rngY $ axisY ^. axisLimits
           dX          = xB - xA
           dY          = yB - yA
           plotTransform = Matrix
@@ -118,11 +119,11 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
       return (const Nothing)
   }
   where
-    funX = if plotLogX then logBase 10 else id
-    funY = if plotLogY then logBase 10 else id
+    funX = if axisX ^. axisLogScale then logBase 10 else id
+    funY = if axisY ^. axisLogScale then logBase 10 else id
     -- Apply log transformation
-    transformedFold = logTransformX plotLogX
-                    $ logTransformY plotLogY
+    transformedFold = logTransformX (axisX ^. axisLogScale)
+                    $ logTransformY (axisY ^. axisLogScale)
                     $ plotPointData plt
 
 data ViewportLayout = ViewportLayout
@@ -368,11 +369,11 @@ usingFillStype p action = do
 
 instance ( AxisValue x ~ xlim, AxisValue x ~ xlim'
          ) => IsLabel "xlim" (Property (Maybe xlim, Maybe xlim') (Plot x y)) where
-  fromLabel = Property $ lens axisLimitX (\p x -> p { axisLimitX = x })
+  fromLabel = #xaxis . #lim
 
 instance ( AxisValue y ~ ylim, AxisValue y ~ ylim'
          ) => IsLabel "ylim" (Property (Maybe ylim, Maybe ylim') (Plot x y)) where
-  fromLabel = Property $ lens axisLimitY (\p x -> p { axisLimitY = x })
+  fromLabel = #yaxis . #lim
 
 instance IsLabel "title" (Property [Char] (Plot x y)) where
   fromLabel = Property (lens plotTitle (\p x -> p { plotTitle = x }))
@@ -384,11 +385,18 @@ instance IsLabel "title" (Property (Maybe [Char]) (Plot x y)) where
 instance IsLabel "grid" (Property Bool (Plot x y)) where
   fromLabel = Property (lens plotGrid (\p x -> p { plotGrid = x }))
 
+instance (AxisParam x ~ a) => IsLabel "xaxis" (Property a (Plot x y)) where
+  fromLabel = Property (lens axisX (\p x -> p { axisX = x }))
+
+instance (AxisParam y ~ a) => IsLabel "yaxis" (Property a (Plot x y)) where
+  fromLabel = Property (lens axisY (\p x -> p { axisY = x }))
+
+
 instance IsLabel "logx" (Property Bool (Plot x y)) where
-  fromLabel = Property (lens plotLogX (\p x -> p { plotLogX = x }))
+  fromLabel = #yaxis . #log
 
 instance IsLabel "logy" (Property Bool (Plot x y)) where
-  fromLabel = Property (lens plotLogY (\p x -> p { plotLogY = x }))
+  fromLabel = #xaxis . #log
 
 
 ----------------------------------------
@@ -411,14 +419,11 @@ plot ps = mempty { plotObjects = ps }
 -- | Complete plot with single pait of axes
 data Plot x y = Plot
   { plotObjects :: [PlotObj x y]
-  , axisLimitX  :: (Maybe (AxisValue x), Maybe (AxisValue x))
-  , axisLimitY  :: (Maybe (AxisValue y), Maybe (AxisValue y))
+  , axisX       :: !(AxisParam x)
+  , axisY       :: !(AxisParam y)
   , plotTitle   :: !(Maybe String)
   , plotGrid    :: !Bool
-  , plotLogX    :: !Bool
-  , plotLogY    :: !Bool
   }
-
 
 -- | Single entity on plog
 data PlotObj x y = PlotObj
@@ -445,26 +450,19 @@ instance (Axis x, Axis y) => Monoid (PlotObj x y) where
 instance Semigroup (Plot x y) where
   a <> b = Plot
     { plotObjects = plotObjects a <> plotObjects b
-    , axisLimitX  = axisLimitX a `onFirst` axisLimitX b
-    , axisLimitY  = axisLimitY a `onFirst` axisLimitY b
+    , axisX       = axisX a <> axisX b
+    , axisY       = axisY a <> axisY b
     , plotTitle   = getFirst $ First (plotTitle  a) <> First (plotTitle b)
     , plotGrid    = plotGrid a || plotGrid b
-    , plotLogX    = plotLogX a || plotLogX b
-    , plotLogY    = plotLogY a || plotLogY b
     }
-    where
-      onFirst :: forall a. (Maybe a, Maybe a) -> (Maybe a, Maybe a) -> (Maybe a, Maybe a)
-      onFirst x y = coerce (coerce x <> coerce y :: (First a, First a))
 
 instance Monoid (Plot x y) where
   mempty = Plot
     { plotObjects = []
-    , axisLimitX  = (Nothing,Nothing)
-    , axisLimitY  = (Nothing,Nothing)
+    , axisX       = mempty
+    , axisY       = mempty
     , plotTitle   = mempty
     , plotGrid    = False
-    , plotLogX    = False
-    , plotLogY    = False
     }
 
 ----------------------------------------------------------------
