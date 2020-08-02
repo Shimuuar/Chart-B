@@ -32,7 +32,6 @@ import Data.Default.Class
 import Data.Monoid
 import Data.Foldable
 import Data.Maybe
-import Data.Ord
 import Control.Arrow   ((***))
 import Control.Category
 import Control.Monad
@@ -56,7 +55,7 @@ import Graphics.Rendering.ChartB.Types.Property
 -- Rendering of plots
 ----------------------------------------------------------------
 
-plotToRenderable :: Plot Numeric Numeric -> Renderable ()
+plotToRenderable :: (Axis x, Axis y) => Plot x y -> Renderable ()
 plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
   { minsize = return (0,0)
   , render  = \(w,h) -> do
@@ -66,11 +65,13 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
 
       -- First we need to compute ranges for the plot and transform
       -- from plot coordinates to viewport coordinates
-      let (rngX,rngY) = estimateRange transformedFold axisX axisY
-          (xA,xB)     = fromRange rngX $ axisX ^. axisLimits
-          (yA,yB)     = fromRange rngY $ axisY ^. axisLimits
-          dX          = xB - xA
-          dY          = yB - yA
+      let (rngX,rngY) = estimateRange (plotPointData plt) axisX axisY
+          axisTrX = makeAxisTransform axisX rngX
+          axisTrY = makeAxisTransform axisY rngY
+          (xA,xB) = axisPlotRange axisTrX
+          (yA,yB) = axisPlotRange axisTrY
+          dX      = xB - xA
+          dY      = yB - yA
           plotTransform = Matrix
             { xx = 1/dX, yx = 0
             , xy = 0   , yy = 1/dY
@@ -78,8 +79,10 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
             , y0 = -yA / dY
             }
       -- Now we need to compute labels for axes, margins for labels
-      let ticksX = numericTicks 5 (xA,xB)
-          ticksY = numericTicks 5 (yA,yB)
+      let ticksX = axisTicks axisTrX
+          ticksY = axisTicks axisTrY
+          funX   = axisPointMap axisTrX
+          funY   = axisPointMap axisTrY
       ViewportLayout{..} <- computeViewportLayout (w,h) plotTitle ticksX ticksY
       let tr = plotTransform * viewportTransform
       -- Draw plots
@@ -87,28 +90,28 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
         runDrawing tr funX funY $ do
           when plotGrid $ do
             let gridStyle = def & line_color .~ opaque lightgray
-            forM_ ticksX $ \(Tick _ x) -> do
-              liftedDrawAlignedLines gridStyle [(x,yA), (x,yB)]
-            forM_ ticksY $ \(Tick _ y) -> do
-              liftedDrawAlignedLines gridStyle [(xA,y), (xB,y)]
+            forM_ ticksX $ \(Tick _ (funX -> x)) -> do
+              liftedDrawAlignedLinesU gridStyle [(x,yA), (x,yB)]
+            forM_ ticksY $ \(Tick _ (funY -> y)) -> do
+              liftedDrawAlignedLinesU gridStyle [(xA,y), (xB,y)]
           plotFunction plt (plotParam plt)
       -- Plot axes on top of everything else
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 0 1]
       strokeAlignedPointPath $ transformL viewportTransform <$> [Point 0 0, Point 1 0]
       withLineStyle def $ do
         forM_ ticksX $ \(Tick _ x) -> do
-          let Point px py = transformL tr $ Point x yA
+          let Point px py = transformL tr $ Point (funX x) yA
           strokeAlignedPointPath [Point px py, Point px (py-5)]
         forM_ ticksY $ \(Tick _ y) -> do
-          let Point px py = transformL tr $ Point xA y
+          let Point px py = transformL tr $ Point xA (funY y)
           strokeAlignedPointPath [ Point px py, Point (px+5) py ]
       -- Plot labels
       withFontStyle def $ do
         forM_ ticksX $ \(Tick nm x) -> do
-          let Point x' y' = transformL tr $ Point x yA
+          let Point x' y' = transformL tr $ Point (funX x) yA
           drawTextA HTA_Centre VTA_Top (Point x' (y'+2)) nm
         forM_ ticksY $ \(Tick nm y) -> do
-          let Point x' y' = transformL tr $ Point xA y
+          let Point x' y' = transformL tr $ Point xA (funY y)
           drawTextA HTA_Right VTA_Centre (Point (x'-marginAxis) y') nm
       -- Plot title
       forM_ plotTitle $ \title -> do
@@ -116,13 +119,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
         drawTextA HTA_Centre VTA_Bottom p title
       return (const Nothing)
   }
-  where
-    funX = if axisX ^. axisLogScale then logBase 10 else id
-    funY = if axisY ^. axisLogScale then logBase 10 else id
-    -- Apply log transformation
-    transformedFold = logTransformX (axisX ^. axisLogScale)
-                    $ logTransformY (axisY ^. axisLogScale)
-                    $ plotPointData plt
+
 
 data ViewportLayout = ViewportLayout
   { marginAxis        :: !Double
@@ -156,34 +153,6 @@ computeViewportLayout (w,h) title ticksX ticksY = do
     }
   where
     marginAxis = 5
-
-
-logTransformX :: Bool -> FoldOverAxes Numeric y -> FoldOverAxes Numeric y
-logTransformX False f = f
-logTransformX True  (FoldOverAxes f) = FoldOverAxes $ \stepXY stepX stepY ->
-  f (\a x y -> stepXY a (logBase 10 x) y) (\a x -> stepX a (logBase 10 x)) (stepY)
-
-logTransformY :: Bool -> FoldOverAxes x Numeric -> FoldOverAxes x Numeric
-logTransformY False f = f
-logTransformY True  (FoldOverAxes f) = FoldOverAxes $ \stepXY stepX stepY ->
-  f (\a x y -> stepXY a x (logBase 10 y)) stepX (\a y -> stepY a (logBase 10 y))
-
-
-fromRange :: AxisRangeEst Numeric -> (Maybe Double, Maybe Double) -> (Double, Double)
-fromRange _          (Just a , Just b)  = (a   , b  )
-fromRange UnknownLim (Nothing, Nothing) = (0   , 1  )
-fromRange UnknownLim (Just a,  Nothing) = (a   , a+1)
-fromRange UnknownLim (Nothing, Just b)  = (b-1 , b  )
-fromRange (MinMaxLimits a b) (Nothing, Nothing)
-  | a == b    = (a - 0.5, a + 0.5)
-  | otherwise = (a - 0.05*d, b + 0.05*d)
-  where d = b - a
-fromRange (MinMaxLimits _ b) (Just a, Nothing) = (a, b + 0.05*d)
-  where b' = max a b
-        d  = b' - a
-fromRange (MinMaxLimits a _) (Nothing, Just b) = (a' - 0.05*d, b)
-  where a' = min a b
-        d  = b - a'
 
 
 
@@ -467,26 +436,3 @@ instance Monoid (Plot x y) where
 -- Axes
 ----------------------------------------------------------------
 
-numericTicks :: Int -> (AxisValue Numeric, AxisValue Numeric) -> [Tick Numeric]
-numericTicks nTicks (a,b) =
-  [ Tick (show x) x | x <- realToFrac <$> steps (fromIntegral nTicks) (a, b) ]
-
-steps :: RealFloat a => a -> (a,a) -> [Rational]
-steps nSteps rs@(minV,maxV) = map ((s*) . fromIntegral) [min' .. max']
-  where
-    s    = chooseStep nSteps rs
-    min' :: Integer
-    min' = ceiling $ realToFrac minV / s
-    max' = floor   $ realToFrac maxV / s
-
-chooseStep :: RealFloat a => a -> (a,a) -> Rational
-chooseStep nsteps (x1,x2) = minimumBy (comparing proximity) stepVals
-  where
-    delta = x2 - x1
-    mult  | delta == 0 = 1  -- Otherwise the case below will use all of memory
-          | otherwise  = 10 ^^ ((floor $ log10 $ delta / nsteps)::Int)
-    stepVals    = map (mult*) [0.1,0.2,0.25,0.5,1.0,2.0,2.5,5.0,10,20,25,50]
-    proximity x = abs $ delta / realToFrac x - nsteps
-
-log10 :: (Floating a) => a -> a
-log10 = logBase 10

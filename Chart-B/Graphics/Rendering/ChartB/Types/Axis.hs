@@ -1,7 +1,9 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MonadComprehensions   #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
@@ -16,6 +18,7 @@ module Graphics.Rendering.ChartB.Types.Axis
   , AxisParam(..)
   , axisLimits
   , axisLogScale
+  , AxisTransform(..)
   , Tick(..)
     -- ** Concrete axes
   , Numeric
@@ -29,9 +32,10 @@ module Graphics.Rendering.ChartB.Types.Axis
 
 import Control.Lens
 import Data.Coerce
-import Data.Proxy
-import Data.Monoid
 import Data.Default.Class
+import Data.List (minimumBy)
+import Data.Monoid
+import Data.Ord
 import Graphics.Rendering.ChartB.Types.Property
 
 
@@ -81,6 +85,8 @@ class Monoid (AxisRangeEst a) => Axis a where
   data AxisRangeEst a
   -- | Convert axis value into range estimator
   axisEsimator :: AxisParam a -> AxisValue a -> AxisRangeEst a
+  -- | Convert range estimate from data to the data relevant for making plot
+  makeAxisTransform :: AxisParam a -> AxisRangeEst a -> AxisTransform a
 
 -- | Estimate range for the axis for given data
 estimateRange
@@ -104,6 +110,16 @@ data Tick a = Tick
   , tickValue :: AxisValue a
   }
 
+-- | Describes how to transform data for plotting
+data AxisTransform a = AxisTransform
+  { axisTicks     :: [Tick a]
+    -- ^ Range of data
+  , axisPlotRange :: (Double,Double)
+    -- ^ Range of in plot coordinates
+  , axisPointMap  :: AxisValue a -> Double
+    -- ^ Function to transform data into plot coordinates
+  }
+
 -- | Parameter for axis.
 data AxisParam a = AxisParam
   { _axisLimits   :: !(Maybe (AxisValue a), Maybe (AxisValue a))
@@ -111,6 +127,7 @@ data AxisParam a = AxisParam
   , _axisLogScale :: Bool
     -- ^ Whether to use log scale.
   }
+
 
 instance Default (AxisParam a) where
   def = AxisParam
@@ -155,6 +172,76 @@ instance Axis Numeric where
         _                                     -> mempty
     where
       est = MinMaxLimits x x
+  --
+  makeAxisTransform AxisParam{..} rangeLin = AxisTransform
+    { axisTicks = if
+        | _axisLogScale -> []
+        | otherwise     -> numericTicks 5 spanLin
+    , axisPlotRange = if
+        | _axisLogScale -> fromRange rangeLog limitsLog
+        | otherwise     -> spanLin
+    , axisPointMap  = if
+        | _axisLogScale -> logBase 10
+        | otherwise     -> id
+    }
+    where
+      spanLin = fromRange rangeLin limitsLin
+      --
+      limitsLin = normalizeRange _axisLimits
+      limitsLog = limitsLin & both %~ (\m -> [ logBase 10 x | x <- m, x > 0 ])
+      -- NOTE: we filter negative values when estimating range
+      rangeLog = case rangeLin of
+        UnknownLim       -> UnknownLim
+        MinMaxLimits x y -> MinMaxLimits (logBase 10 x) (logBase 10 y)
+
+normalizeRange :: Ord a => (Maybe a, Maybe a) -> (Maybe a, Maybe a)
+normalizeRange (Just a, Just b) | a > b = (Just b, Just a)
+normalizeRange r                        = r
+
+fromRange :: AxisRangeEst Numeric -> (Maybe Double, Maybe Double) -> (Double, Double)
+fromRange _          (Just a , Just b)  = (a   , b  )
+fromRange UnknownLim (Nothing, Nothing) = (0   , 1  )
+fromRange UnknownLim (Just a,  Nothing) = (a   , a+1)
+fromRange UnknownLim (Nothing, Just b)  = (b-1 , b  )
+fromRange (MinMaxLimits a b) (Nothing, Nothing)
+  | a == b    = (a - 0.5, a + 0.5)
+  | otherwise = (a - 0.05*d, b + 0.05*d)
+  where d = b - a
+fromRange (MinMaxLimits _ b) (Just a, Nothing)
+  | b' > a    = (a, b + 0.05*d)
+  | otherwise = (a, a+1)
+  where b' = max a b
+        d  = b' - a
+fromRange (MinMaxLimits a _) (Nothing, Just b)
+  | a < b     = (a' - 0.05*d, b)
+  | otherwise = (b-1, b)
+  where a' = min a b
+        d  = b - a'
+
+numericTicks :: Int -> (AxisValue Numeric, AxisValue Numeric) -> [Tick Numeric]
+numericTicks nTicks (a,b) =
+  [ Tick (show x) x | x <- realToFrac <$> steps (fromIntegral nTicks) (a, b) ]
+
+steps :: RealFloat a => a -> (a,a) -> [Rational]
+steps nSteps rs@(minV,maxV) = map ((s*) . fromIntegral) [min' .. max']
+  where
+    s    = chooseStep nSteps rs
+    min' :: Integer
+    min' = ceiling $ realToFrac minV / s
+    max' = floor   $ realToFrac maxV / s
+
+chooseStep :: RealFloat a => a -> (a,a) -> Rational
+chooseStep nsteps (x1,x2) = minimumBy (comparing proximity) stepVals
+  where
+    delta = x2 - x1
+    mult  | delta == 0 = 1  -- Otherwise the case below will use all of memory
+          | otherwise  = 10 ^^ ((floor $ log10 $ delta / nsteps)::Int)
+    stepVals    = map (mult*) [0.1,0.2,0.25,0.5,1.0,2.0,2.5,5.0,10,20,25,50]
+    proximity x = abs $ delta / realToFrac x - nsteps
+
+log10 :: (Floating a) => a -> a
+log10 = logBase 10
+
 
 instance Semigroup (AxisRangeEst Numeric) where
   UnknownLim <> x = x
