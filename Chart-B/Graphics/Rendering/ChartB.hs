@@ -130,10 +130,10 @@ data ViewportLayout = ViewportLayout
 
 computeViewportLayout :: (Double,Double) -> Maybe String -> [Tick x] -> [Tick y] -> BackendProgram ViewportLayout
 computeViewportLayout (w,h) title ticksX ticksY = do
-  labelMarginX <- case ticksX of
+  labelMarginX <- case ticksY of
     [] -> return 0
     _  -> maximum . map fst <$> mapM (textDimension . tickLabel) ticksY
-  labelMarginY <- case ticksY of
+  labelMarginY <- case ticksX of
     [] -> return 0
     _  -> maximum . map snd <$> mapM (textDimension . tickLabel) ticksX
   titleMarginY <- case title of
