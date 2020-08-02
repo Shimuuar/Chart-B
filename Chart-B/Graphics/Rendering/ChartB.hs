@@ -360,10 +360,10 @@ instance (AxisParam y ~ a) => IsLabel "yaxis" (Property a (Plot x y)) where
 
 
 instance IsLabel "logx" (Property Bool (Plot x y)) where
-  fromLabel = #yaxis . #log
+  fromLabel = #xaxis . #log
 
 instance IsLabel "logy" (Property Bool (Plot x y)) where
-  fromLabel = #xaxis . #log
+  fromLabel = #yaxis . #log
 
 
 ----------------------------------------
