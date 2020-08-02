@@ -12,6 +12,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ViewPatterns          #-}
 -- |
 -- Data types and type classes for working with plot axes.
 module Graphics.Rendering.ChartB.Types.Axis
@@ -178,7 +179,7 @@ instance Axis Numeric where
   --
   makeAxisTransform AxisParam{..} rangeLin = AxisTransform
     { axisTicks = if
-        | _axisLogScale -> []
+        | _axisLogScale -> numericLogTicks spanLog
         | otherwise     -> numericTicks 5 spanLin
     , axisPlotRange = if
         | _axisLogScale -> fromRange rangeLog limitsLog
@@ -189,6 +190,7 @@ instance Axis Numeric where
     }
     where
       spanLin = fromRange rangeLin limitsLin
+      spanLog = fromRange rangeLog limitsLog
       --
       limitsLin = normalizeRange _axisLimits
       limitsLog = limitsLin & both %~ (\m -> [ logBase 10 x | x <- m, x > 0 ])
@@ -225,6 +227,10 @@ numericTicks :: Int -> (AxisValue Numeric, AxisValue Numeric) -> [Tick Numeric]
 numericTicks nTicks (a,b) =
   [ Tick (show x) x | x <- realToFrac <$> steps (fromIntegral nTicks) (a, b) ]
 
+numericLogTicks :: (AxisValue Numeric, AxisValue Numeric) -> [Tick Numeric]
+numericLogTicks (la,lb) =
+  [ Tick (show x) x | x <- realToFrac <$> logTicks (10**la, 10**lb) ]
+
 steps :: RealFloat a => a -> (a,a) -> [Rational]
 steps nSteps rs@(minV,maxV) = map ((s*) . fromIntegral) [min' .. max']
   where
@@ -241,6 +247,51 @@ chooseStep nsteps (x1,x2) = minimumBy (comparing proximity) stepVals
           | otherwise  = 10 ^^ ((floor $ log10 $ delta / nsteps)::Int)
     stepVals    = map (mult*) [0.1,0.2,0.25,0.5,1.0,2.0,2.5,5.0,10,20,25,50]
     proximity x = abs $ delta / realToFrac x - nsteps
+
+{-
+ Rules: Do not subdivide between powers of 10 until all powers of 10
+          get a major ticks.
+        Do not subdivide between powers of ten as [1,2,4,6,8,10] when
+          5 gets a major ticks
+          (ie the major ticks need to be a subset of the minor tick)
+-}
+logTicks :: (Double,Double) -> [Rational]
+logTicks (low,high) = major
+ where
+  ratio    = high/low
+  logRatio = log10 ratio
+
+  midselection r l  = filter (inRange r) (powers r l)
+  inRange (a,b) (fromRational -> x) = (a <= x) && (x <= b)
+
+  logRange = (log10 low, log10 high)
+
+  roundPow x = 10^^(round x :: Integer)
+
+  major
+    | logRatio > 17.5 = roundPow <$> steps (min 5 logRatio) logRange
+    | logRatio > 12   = roundPow <$> steps (logRatio / 5) logRange
+    | logRatio > 6    = roundPow <$> steps (logRatio / 2) logRange
+    | logRatio > 3    = midselection (low,high) [1]
+    | ratio > 20      = midselection (low,high) [1,5]
+    | ratio > 6       = midselection (low,high) [1,2,4,6,8]
+    | ratio > 3       = midselection (low,high) [1..9]
+    | otherwise       = steps 5 (low,high)
+
+
+  -- minor | 50 < log10 ratio' = map roundPow $
+  --                             steps 50 (log10 dl', log10 dh')
+  --       | 6 < log10 ratio'  = filterX [1,10]
+  --       | 3 < log10 ratio'  = filterX [1,5,10]
+  --       | 6 < ratio'        = filterX [1..10]
+  --       | 3 < ratio'        = filterX [1,1.2..10]
+  --       | otherwise         = steps 50 (dl', dh')
+
+powers :: (Double,Double) -> [Rational] -> [Rational]
+powers (x,y) l = [ a*10^^p | p <- [(floor (log10 x))..(ceiling (log10 y))] :: [Integer]
+                           , a <- l
+                           ]
+
 
 log10 :: (Floating a) => a -> a
 log10 = logBase 10
