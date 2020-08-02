@@ -7,9 +7,11 @@
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UndecidableInstances  #-}
 -- |
 -- Data types and type classes for working with plot axes.
 module Graphics.Rendering.ChartB.Types.Axis
@@ -109,6 +111,7 @@ data Tick a = Tick
   { tickLabel :: String
   , tickValue :: AxisValue a
   }
+deriving instance (Show (AxisValue a)) => Show (Tick a)
 
 -- | Describes how to transform data for plotting
 data AxisTransform a = AxisTransform
