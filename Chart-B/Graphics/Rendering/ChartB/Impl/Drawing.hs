@@ -28,13 +28,15 @@ data DrawingParam x y = DrawingParam
   { drawTransform :: Matrix
   , xToDrawCoord  :: AxisValue x -> Double
   , yToDrawCoord  :: AxisValue y -> Double
+  , xDrawRange    :: (Double,Double)
+  , yDrawRange    :: (Double,Double)
   }
 
 -- | Wrapper on top of BackendProgram for drawing. It keeps track of
 --   current viewport transformation and color wheel.
 newtype Drawing x y a = Drawing
   { unDrawing :: StateT [AlphaColour Double] (ReaderT (DrawingParam x y) (Program ChartBackendInstr)) a }
-   deriving newtype (Functor, Applicative, Monad)
+  deriving newtype (Functor, Applicative, Monad, MonadReader (DrawingParam x y))
 
 -- | Execute drawing program
 runDrawing

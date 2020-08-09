@@ -90,6 +90,8 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
             { drawTransform = tr
             , xToDrawCoord  = funX
             , yToDrawCoord  = funY
+            , xDrawRange    = (xA,xB)
+            , yDrawRange    = (yA,yB)
             }
       -- Draw plots
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1)) $
