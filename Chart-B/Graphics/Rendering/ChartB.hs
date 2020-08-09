@@ -85,10 +85,15 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
           funX   = axisPointMap axisTrX
           funY   = axisPointMap axisTrY
       ViewportLayout{..} <- computeViewportLayout (w,h) plotTitle ticksX ticksY
-      let tr = plotTransform * viewportTransform
+      let tr    = plotTransform * viewportTransform
+          drawP = DrawingParam
+            { drawTransform = tr
+            , xToDrawCoord  = funX
+            , yToDrawCoord  = funY
+            }
       -- Draw plots
       withClipRegion (transformL viewportTransform $ Rect (Point 0 0) (Point 1 1)) $
-        runDrawing tr funX funY $ do
+        runDrawing drawP $ do
           when plotGrid $ do
             let gridStyle = def & line_color .~ opaque lightgray
             forM_ ticksX $ \(Tick _ (funX -> x)) -> do
