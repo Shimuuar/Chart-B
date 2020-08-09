@@ -13,3 +13,6 @@ instance Transformable Point where
 
 instance Transformable Rect where
   transformL m (Rect p1 p2) = Rect (transformL m p1) (transformL m p2)
+
+instance Transformable a => Transformable [a] where
+  transformL m = fmap (transformL m)
