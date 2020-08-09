@@ -24,6 +24,7 @@ module Graphics.Rendering.ChartB
   , lineplotOf
   , barplotOf
   , axvlineAt
+  , axhlineAt
     -- * Underlying data types
   , Plot(..)
   , PlotObj(..)
@@ -36,6 +37,7 @@ import Data.Maybe
 import Control.Arrow   ((***))
 import Control.Category
 import Control.Monad
+import Control.Monad.Reader
 import Control.Lens
 import Graphics.Rendering.Chart.Renderable
 import Graphics.Rendering.Chart.Drawing
@@ -203,8 +205,26 @@ scatterplotRender optic xy = newPlot >=> \p -> do
 axvlineAt :: Axis x => AxisValue x -> PlotObj x y
 axvlineAt x = PlotObj
   { plotFunction  = newPlot >=> \p -> do
+      (yA,yB) <- asks yDrawRange
+      funX    <- asks xToDrawCoord
+      let xVal = funX x
+      usingLineStype p $ \style ->
+        liftedDrawLinesU style [(xVal,yA), (xVal,yB)]
       return ()
   , plotPointData = FoldOverAxes $ \_ stepX _ a -> stepX a x
+  , plotParam     = mempty
+  }
+
+axhlineAt :: Axis y => AxisValue y -> PlotObj x y
+axhlineAt y = PlotObj
+  { plotFunction  = newPlot >=> \p -> do
+      (xA,xB) <- asks xDrawRange
+      funY    <- asks yToDrawCoord
+      let yVal = funY y
+      usingLineStype p $ \style ->
+        liftedDrawLinesU style [(xA,yVal), (xB,yVal)]
+      return ()
+  , plotPointData = FoldOverAxes $ \_ _ stepY a -> stepY a y
   , plotParam     = mempty
   }
 
@@ -449,8 +469,3 @@ instance Monoid (Plot x y) where
     , plotTitle   = mempty
     , plotGrid    = False
     }
-
-----------------------------------------------------------------
--- Axes
-----------------------------------------------------------------
-
