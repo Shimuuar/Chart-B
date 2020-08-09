@@ -23,6 +23,7 @@ module Graphics.Rendering.ChartB
   , scatterplotOf
   , lineplotOf
   , barplotOf
+  , axvlineAt
     -- * Underlying data types
   , Plot(..)
   , PlotObj(..)
@@ -157,7 +158,7 @@ computeViewportLayout (w,h) title ticksX ticksY = do
 
 
 ----------------------------------------------------------------
--- Concrete plot objects
+-- Line/scatter plots
 ----------------------------------------------------------------
 
 scatterplotOf :: (Real a, Real b) => Fold s (a,b) -> s -> PlotObj Numeric Numeric
@@ -192,8 +193,18 @@ scatterplotRender optic xy = newPlot >=> \p -> do
 
 
 
+axvlineAt :: Axis x => AxisValue x -> PlotObj x y
+axvlineAt x = PlotObj
+  { plotFunction  = newPlot >=> \p -> do
+      return ()
+  , plotPointData = FoldOverAxes $ \_ stepX _ a -> stepX a x
+  , plotParam     = mempty
+  }
 
 
+----------------------------------------------------------------
+-- Barplot
+----------------------------------------------------------------
 
 barplotOf
   :: (Real x, Real y)
