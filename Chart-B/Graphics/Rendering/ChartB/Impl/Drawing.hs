@@ -81,6 +81,14 @@ liftedDrawLines style pts = Drawing $ do
     $ transformL drawTransform
     $ [ Point (xToDrawCoord x) (yToDrawCoord y) | (x,y) <- pts ]
 
+liftedDrawLinesU :: LineStyle -> [(Double,Double)] -> Drawing x y ()
+liftedDrawLinesU style pts = Drawing $ do
+  tr <- asks drawTransform
+  lift $ lift $ withLineStyle style
+    $ strokePointPath
+    $ transformL tr
+    $ [ Point x y | (x,y) <- pts ]
+
 liftedDrawAlignedLines :: LineStyle -> [(AxisValue x, AxisValue y)] -> Drawing x y ()
 liftedDrawAlignedLines style pts = Drawing $ do
   DrawingParam{..} <- ask
