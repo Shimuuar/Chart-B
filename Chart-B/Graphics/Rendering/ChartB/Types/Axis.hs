@@ -21,6 +21,7 @@ module Graphics.Rendering.ChartB.Types.Axis
   , AxisParam(..)
   , axisLimits
   , axisLogScale
+  , axisLabel
   , AxisTransform(..)
   , Tick(..)
     -- ** Concrete axes
@@ -33,12 +34,15 @@ module Graphics.Rendering.ChartB.Types.Axis
   , estimateRange
   ) where
 
+import Control.Category (Category(..))
 import Control.Lens
 import Data.Coerce
 import Data.Default.Class
 import Data.List (minimumBy)
 import Data.Monoid
 import Data.Ord
+import Prelude hiding (id,(.))
+
 import Graphics.Rendering.ChartB.Types.Property
 
 
@@ -130,6 +134,7 @@ data AxisParam a = AxisParam
     -- ^ User specified limits.
   , _axisLogScale :: Bool
     -- ^ Whether to use log scale.
+  , _axisLabel    :: Maybe String
   }
 
 
@@ -137,16 +142,20 @@ instance Default (AxisParam a) where
   def = AxisParam
     { _axisLimits   = (Nothing,Nothing)
     , _axisLogScale = False
+    , _axisLabel    = Nothing
     }
 
 instance Semigroup (AxisParam a) where
   a <> b = AxisParam
-    { _axisLimits   = onFirst (_axisLimits a) (_axisLimits b)
+    { _axisLimits   = onFirst2 (_axisLimits a) (_axisLimits b)
     , _axisLogScale = _axisLogScale a || _axisLogScale b
+    , _axisLabel    = onFirst  (_axisLabel a) (_axisLabel b)
     }
     where
-      onFirst :: forall b. (Maybe b, Maybe b) -> (Maybe b, Maybe b) -> (Maybe b, Maybe b)
-      onFirst x y = coerce (coerce x <> coerce y :: (First b, First b))
+      onFirst :: forall b. Maybe b -> Maybe b -> Maybe b
+      onFirst x y = coerce (coerce x <> coerce y :: First b)
+      onFirst2 :: forall b. (Maybe b, Maybe b) -> (Maybe b, Maybe b) -> (Maybe b, Maybe b)
+      onFirst2 x y = coerce (coerce x <> coerce y :: (First b, First b))
 
 instance Monoid (AxisParam a) where
   mempty = def
@@ -333,3 +342,9 @@ instance ( lim ~ AxisValue a, lim' ~ AxisValue a
 
 instance IsLabel "log" (Property Bool (AxisParam a)) where
   fromLabel = Property axisLogScale
+
+instance (s ~ String) => IsLabel "label" (Property (Maybe s) (AxisParam a)) where
+  fromLabel = Property axisLabel
+
+instance IsLabel "label" (Property String (AxisParam a)) where
+  fromLabel = Property axisLabel . nonProp ""

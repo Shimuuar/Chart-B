@@ -411,6 +411,15 @@ instance IsLabel "logx" (Property Bool (Plot x y)) where
 instance IsLabel "logy" (Property Bool (Plot x y)) where
   fromLabel = #yaxis . #log
 
+instance (IsLabel "label" (Property a (AxisParam x))
+         ) => IsLabel "xlabel" (Property a (Plot x y)) where
+  fromLabel = #xaxis . #label
+
+instance (IsLabel "label" (Property a (AxisParam y))
+         ) => IsLabel "ylabel" (Property a (Plot x y)) where
+  fromLabel = #yaxis . #label
+
+
 
 ----------------------------------------
 -- Plot object properties
