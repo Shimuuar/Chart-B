@@ -65,9 +65,6 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
       -- First we need to compute transform for viewport of the plot
       -- (area where we do all the plotting). This requires to compute
       -- labels for plot and allocate size for them
-
-      -- First we need to compute ranges for the plot and transform
-      -- from plot coordinates to viewport coordinates
       let (rngX,rngY) = estimateRange (plotPointData plt) axisX axisY
           axisTrX = makeAxisTransform axisX rngX
           axisTrY = makeAxisTransform axisY rngY
@@ -86,7 +83,9 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
           ticksY = axisTicks axisTrY
           funX   = axisPointMap axisTrX
           funY   = axisPointMap axisTrY
-      ViewportLayout{..} <- computeViewportLayout (w,h) plotTitle ticksX ticksY
+      ViewportLayout{..} <- computeViewportLayout (w,h) plotTitle
+        (axisX ^. axisLabel, axisY ^. axisLabel)
+         ticksX ticksY
       let tr    = plotTransform * viewportTransform
           drawP = DrawingParam
             { drawTransform = tr
@@ -115,7 +114,7 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
         forM_ ticksY $ \(Tick _ y) -> do
           let Point px py = transformL tr $ Point xA (funY y)
           strokeAlignedPointPath [ Point px py, Point (px+5) py ]
-      -- Plot labels
+      -- Plot ticks
       withFontStyle def $ do
         forM_ ticksX $ \(Tick nm x) -> do
           let Point x' y' = transformL tr $ Point (funX x) yA
@@ -123,6 +122,24 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
         forM_ ticksY $ \(Tick nm y) -> do
           let Point x' y' = transformL tr $ Point xA (funY y)
           drawTextA HTA_Right VTA_Centre (Point (x'-marginAxis) y') nm
+      -- Plot axis labels
+      withFontStyle def $ do
+        forM_ (axisX ^. axisLabel) $ \lab -> do
+          let Point x y = transformL viewportTransform (Point 0.5 0)
+          drawTextA HTA_Centre VTA_Top (Point x (y + tickMarginY)) lab
+          -- let stroke yy = strokePointPath [Point (x/2) yy, Point (1.5*x) yy]
+          -- stroke (y + marginAxis)
+          -- stroke (y + marginAxis + tickMarginY)
+          -- stroke (y + marginAxis + tickMarginY + marginAxis)
+        forM_ (axisY ^. axisLabel) $ \lab -> do
+          let Point x y = transformL viewportTransform (Point 0 0.5)
+          drawTextR HTA_Centre VTA_Top 90
+            (Point (x - 2*marginAxis - tickMarginX) y) lab
+          -- let stroke xx = strokePointPath [Point xx  (0.5*y), Point xx (1.5*y)]
+          -- stroke (x - marginAxis)
+          -- stroke (x - marginAxis - tickMarginX)
+          -- stroke (x - marginAxis - tickMarginX - marginAxis)
+          -- stroke (x - marginAxis - tickMarginX - marginAxis - labelMarginX)
       -- Plot title
       forM_ plotTitle $ \title -> do
         let p = transformL viewportTransform $ Point 0.5 1
@@ -133,45 +150,62 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
 
 -- | How plot is laid out in rectangle
 data ViewportLayout = ViewportLayout
-  { marginAxis        :: !Double -- ^ Margin for axis themselves
-  , labelMarginX      :: !Double -- ^ Margin reserved for labels at X axis
-  , labelMarginY      :: !Double -- ^ Margin reserved for labels at Y axis
+  { marginAxis        :: !Double
+    -- ^ Margin for axis themselves
+  , tickMarginX       :: !Double
+    -- ^ Margin reserved for labels at X axis
+  , tickMarginY       :: !Double
+    -- ^ Margin reserved for labels at Y axis
+  , labelMarginX      :: !Double
+  , labelMarginY      :: !Double
   , viewportTransform :: !Matrix
     -- ^ Transformation between \"pixel\" coordinates and (0,1)
     --   coordinates for plot itself
   }
 
 computeViewportLayout
-  :: (Double,Double)            -- ^ Plot dimensions
-  -> Maybe String               -- ^ Plot title
-  -> [Tick x]                   -- ^ Ticks for X axis
-  -> [Tick y]                   -- ^ Ticks for Y axis
+  :: (Double,Double)              -- ^ Plot dimensions
+  -> Maybe String                 -- ^ Plot title
+  -> (Maybe String, Maybe String) -- ^ Axis labels
+  -> [Tick x]                     -- ^ Ticks for X axis
+  -> [Tick y]                     -- ^ Ticks for Y axis
   -> BackendProgram ViewportLayout
-computeViewportLayout (w,h) title ticksX ticksY = do
-  labelMarginX <- case ticksY of
+computeViewportLayout (w,h) title (labX, labY) ticksX ticksY = do
+  tickMarginX <- case ticksY of
     [] -> return 0
     _  -> maximum . map fst <$> mapM (textDimension . tickLabel) ticksY
-  labelMarginY <- case ticksX of
+  tickMarginY <- case ticksX of
     [] -> return 0
     _  -> maximum . map snd <$> mapM (textDimension . tickLabel) ticksX
+  labelMarginY <- case labX of
+    Nothing -> return 0
+    Just "" -> return 0
+    Just s  -> snd <$> textDimension s
+  labelMarginX <- case labY of
+    Nothing -> return 0
+    Just "" -> return 0
+    Just s  -> snd <$> textDimension s
   titleMarginY <- case title of
     Nothing -> return 0
     Just "" -> return 0
     Just  s -> snd <$> textDimension s
+  let xOverhead    = sumWidths [ tickMarginX, labelMarginX ]
+      yOverheadBot = sumWidths [ tickMarginY, labelMarginY ]
+      yOverheadTop = sumWidths [ titleMarginY ]
   return ViewportLayout
     { viewportTransform = Matrix
-        { xx =  (w - marginAxis*3 - labelMarginX)
-        , yy = -(h - marginAxis*3 - labelMarginY - titleMarginY)
+        { xx =  (w - 2*marginAxis - xOverhead)
+        , yy = -(h - marginAxis - yOverheadTop - yOverheadBot)
         , yx = 0
         , xy = 0
-        , x0 = marginAxis * 2 + labelMarginX
-        , y0 = h - (marginAxis * 2 + labelMarginY)
+        , x0 = 0 + marginAxis + xOverhead
+        , y0 = h - yOverheadBot
         }
     , ..
     }
   where
-    marginAxis = 5
-
+    marginAxis = 3
+    sumWidths  = sum . fmap (+marginAxis) . filter (/= 0)
 
 
 ----------------------------------------------------------------
