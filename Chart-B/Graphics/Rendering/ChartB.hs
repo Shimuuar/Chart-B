@@ -131,14 +131,22 @@ plotToRenderable Plot{ plotObjects = (mconcat -> plt), ..} = Renderable
   }
 
 
+-- | How plot is laid out in rectangle
 data ViewportLayout = ViewportLayout
-  { marginAxis        :: !Double
-  , labelMarginX      :: !Double
-  , labelMarginY      :: !Double
+  { marginAxis        :: !Double -- ^ Margin for axis themselves
+  , labelMarginX      :: !Double -- ^ Margin reserved for labels at X axis
+  , labelMarginY      :: !Double -- ^ Margin reserved for labels at Y axis
   , viewportTransform :: !Matrix
+    -- ^ Transformation between \"pixel\" coordinates and (0,1)
+    --   coordinates for plot itself
   }
 
-computeViewportLayout :: (Double,Double) -> Maybe String -> [Tick x] -> [Tick y] -> BackendProgram ViewportLayout
+computeViewportLayout
+  :: (Double,Double)            -- ^ Plot dimensions
+  -> Maybe String               -- ^ Plot title
+  -> [Tick x]                   -- ^ Ticks for X axis
+  -> [Tick y]                   -- ^ Ticks for Y axis
+  -> BackendProgram ViewportLayout
 computeViewportLayout (w,h) title ticksX ticksY = do
   labelMarginX <- case ticksY of
     [] -> return 0
@@ -423,11 +431,11 @@ plot ps = mempty { plotObjects = ps }
 
 -- | Complete plot with single pait of axes
 data Plot x y = Plot
-  { plotObjects :: [PlotObj x y]
-  , axisX       :: !(AxisParam x)
-  , axisY       :: !(AxisParam y)
-  , plotTitle   :: !(Maybe String)
-  , plotGrid    :: !Bool
+  { plotObjects :: [PlotObj x y]   -- ^ Collection of plot object
+  , axisX       :: !(AxisParam x)  -- ^ Parameters for X axis
+  , axisY       :: !(AxisParam y)  -- ^ Parameters for Y axis
+  , plotTitle   :: !(Maybe String) -- ^ Plot title
+  , plotGrid    :: !Bool           -- ^ Whether plot grid is enabled
   }
 
 -- | Single entity on plog
